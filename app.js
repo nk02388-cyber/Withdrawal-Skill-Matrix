@@ -11,7 +11,7 @@ const fmt = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyl
 const fmtReport = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 const fmtAudit = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 sessionStorage.removeItem('editCode');
-const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,stock:null,stockLines:[],view:'dashboard'};
+const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,selectedFormulaCode:'',stock:null,stockLines:[],view:'dashboard'};
 const editing = () => state.verified && !!state.code;
 const supervisor = () => editing() && state.role==='supervisor';
 const operator = () => editing() && state.role==='operator';
@@ -34,30 +34,32 @@ const statusLabels={queued:'รอดำเนินการ',active:'กำล
 const eventLabels={created:'สร้างใบเบิก',imported:'ข้อมูลก่อนเปิดประวัติ',started:'เริ่มงาน',paused:'พักงาน',resumed:'ทำงานต่อ',completed:'จบงาน',partial:'เบิกไม่ครบ',cancelled:'ยกเลิก',edited:'แก้ไขใบเบิก'};
 const eventConfig={pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
 let pendingEvent=null,editingTicketId=null;
-const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===$('#bom-select').value);
+const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===state.selectedFormulaCode);
 function materialTable(lines){return `<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>ที่มา</th><th>จำนวนเบิก</th></tr></thead><tbody>${lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${l.source==='stock'?`นอก BOM · Stock ${esc(l.stock_report_date||'')}`:`BOM · ${qtyText(l.qty_per_unit)} ${esc(l.unit)} / FG`}</td><td><strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></td></tr>`).join('')}</tbody></table></div>`;}
 function renderBomOptions(){
+  if(!state.bom){$('#bom-results').innerHTML='';$('#bom-source').textContent='โหลด BOM ไม่สำเร็จ';renderBomPreview();return;}
   const term=$('#bom-search').value.trim();
-  const old=$('#bom-select').value;
-  const matches=state.bom.formulas.filter(f=>matchesKeywords(f.fg_code,f.fg_name,term)).slice(0,50);
-  $('#bom-select').innerHTML='<option value="">เลือกสินค้า FG</option>'+matches.map(f=>`<option value="${esc(f.fg_code)}">${esc(f.fg_code)} · ${esc(f.fg_name)}</option>`).join('');
-  if(matches.some(f=>f.fg_code===old))$('#bom-select').value=old;
-  $('#bom-source').textContent=`สูตรจาก PK WMS · ${state.bom.formulas.length} สินค้า · แสดง ${matches.length} รายการแรก${term?' ที่ตรงกับคำค้น':''} · ไม่รวมยอดสต็อก`;
+  const matches=term?state.bom.formulas.filter(f=>matchesKeywords(f.fg_code,f.fg_name,term)):[];
+  const exact=matches.find(f=>f.fg_code.toLocaleLowerCase('th-TH')===term.toLocaleLowerCase('th-TH'));
+  state.selectedFormulaCode=(exact||matches.length===1?exact||matches[0]:null)?.fg_code||'';
+  $('#bom-results').innerHTML=matches.slice(0,30).map(f=>`<button type="button" class="bom-result ${f.fg_code===state.selectedFormulaCode?'selected':''}" data-bom-choice="${esc(f.fg_code)}" aria-pressed="${f.fg_code===state.selectedFormulaCode}"><strong>${esc(f.fg_code)}</strong><span>${esc(f.fg_name)}</span></button>`).join('');
+  $('#bom-source').textContent=`สูตรจาก PK WMS · ${state.bom.formulas.length} สินค้า · ${!term?'พิมพ์เพื่อค้นหา':!matches.length?'ไม่พบสูตรที่ตรงกับคำค้น':`พบ ${matches.length} รายการ${matches.length>30?' · แสดง 30 รายการแรก':''}${state.selectedFormulaCode?' · เลือกสูตรแล้ว':' · กดเลือกรายการที่ต้องการ'}`} · ไม่รวมยอดสต็อก`;
   renderBomPreview();
+  renderStockMatch();
 }
 function renderBomPreview(){
   if(!$('#bom-fields').hidden&& !state.bom){$('#bom-preview').innerHTML=empty('โหลด BOM ไม่สำเร็จ เลือกเบิกเฉพาะรายการ Stock ได้');return;}
   const f=chosenFormula(),qty=Number($('#ticket-form [name="requested_qty"]').value);
-  if(!f){$('#bom-preview').innerHTML=empty('เลือกสูตรการผลิตเพื่อดูรายการวัตถุดิบ');return;}
-  if(!Number.isFinite(qty)||qty<=0){$('#bom-preview').innerHTML=empty('ใส่จำนวนที่ต้องการผลิตเพื่อคำนวณวัสดุ');return;}
+  if(!f){$('#bom-preview').innerHTML=empty('พิมพ์รหัสหรือชื่อสินค้า FG แล้วเลือกรายการที่ต้องการจากผลค้นหา');return;}
   if(f.lines.some(l=>!Number.isFinite(Number(l.qty_per_unit))||Number(l.qty_per_unit)<=0)){$('#bom-preview').innerHTML=empty('สูตรนี้มีอัตราใช้วัสดุไม่ครบ กรุณาตรวจสูตรใน PK WMS ก่อนสร้างใบเบิก');return;}
+  if(!Number.isFinite(qty)||qty<=0){$('#bom-preview').innerHTML=`<div class="bom-summary"><strong>${esc(f.fg_code)} · ${esc(f.fg_name)}</strong><span>${f.lines.length} รายการวัสดุ</span></div><div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>อัตราต่อ 1 FG</th></tr></thead><tbody>${f.lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${qtyText(l.qty_per_unit)} ${esc(l.unit)}</td></tr>`).join('')}</tbody></table></div><p class="hint">ใส่จำนวนที่ต้องการผลิตเพื่อคำนวณจำนวนเบิก</p>`;return;}
   const lines=f.lines.map(l=>({...l,required_qty:calcQty(l.qty_per_unit,qty)}));
   $('#bom-preview').innerHTML=`<div class="bom-summary"><strong>${esc(f.fg_code)} · ${esc(f.fg_name)}</strong><span>จำนวน ${qtyText(qty)} FG · ${lines.length} รายการวัสดุ</span></div>${materialTable(lines)}<p class="hint">จำนวนเบิกคำนวณตาม BOM (4 ตำแหน่ง) กรุณาตรวจสอบหน่วยและจำนวนจริงก่อนเบิก</p>`;
 }
 const stockMode=()=>document.querySelector('#ticket-form [name="source_mode"]:checked')?.value==='stock';
 function setTicketMode(){
   const manual=stockMode();$('#bom-fields').hidden=manual;
-  $('#bom-select').required=!manual;
+  $('#bom-search').required=!manual;
   $('#ticket-form [name="requested_qty"]').required=!manual;
   if(!manual)renderBomPreview();
   renderStockMatch();
@@ -288,17 +290,24 @@ window.addEventListener('afterprint',()=>document.body.classList.remove('print-t
 $('#new-ticket-btn').addEventListener('click',async()=>{
   const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
   if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
-  state.bom=null;state.stockLines=[];$('#ticket-form').reset();
+  state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();
   const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
   if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
   $('#ticket-form [name="job_type_id"]').innerHTML=jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
   $('#ticket-form [name="assignee_id"]').innerHTML=people.map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join('');
   $('#ticket-form [name="source_mode"][value="stock"]').checked=!bomLoaded;
-  if(bomLoaded)renderBomOptions();else $('#bom-select').innerHTML='<option value="">โหลด BOM ไม่สำเร็จ</option>';
+  $('#ticket-form [name="source_mode"][value="bom"]').disabled=!bomLoaded;
+  if(bomLoaded)renderBomOptions();else{$('#bom-results').innerHTML='';$('#bom-source').textContent='โหลด BOM ไม่สำเร็จ เลือกเบิกเฉพาะ Stock ได้';}
   renderStockLines();setTicketMode();$('#ticket-dialog').showModal();
 });
 $('#bom-search').addEventListener('input',renderBomOptions);
-$('#bom-select').addEventListener('change',()=>{renderBomPreview();renderStockMatch();});
+$('#bom-results').addEventListener('click',e=>{
+  const choice=e.target.closest('[data-bom-choice]');
+  if(!choice)return;
+  $('#bom-search').value=choice.dataset.bomChoice;
+  renderBomOptions();
+  $('#ticket-form [name="requested_qty"]').focus();
+});
 $('#ticket-form [name="requested_qty"]').addEventListener('input',renderBomPreview);
 document.querySelectorAll('#ticket-form [name="source_mode"]').forEach(input=>input.addEventListener('change',setTicketMode));
 $('#stock-code').addEventListener('input',renderStockMatch);
