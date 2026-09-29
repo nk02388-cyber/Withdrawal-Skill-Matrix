@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fromBangkokInput, timeEditError, toBangkokInput } from '../ticket-time.mjs';
+import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from '../ticket-time.mjs';
+
+test('displayed timestamps use Bangkok time on every device', () => {
+  const instant = '2026-09-29T04:12:00Z';
+  assert.match(formatBangkokDateTime(instant), /11:12/);
+  assert.match(formatBangkokClock(instant), /11:12/);
+  assert.equal(formatBangkokDateTime(null), '—');
+  assert.equal(formatBangkokDateTime('not-a-date'), '—');
+});
 
 test('Bangkok datetime input keeps the intended instant and preserves unchanged precision', () => {
   const original = '2026-09-29T04:12:37.456+00:00';

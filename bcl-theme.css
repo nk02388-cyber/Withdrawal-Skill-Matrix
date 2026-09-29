@@ -1,11 +1,11 @@
-:root{color:#193b2b;background:#f1f6f0}
+:root{font-family:'Noto Sans Thai',Tahoma,sans-serif;font-size:14px;line-height:1.5;color:#193b2b;background:#f1f6f0}
 body{background:#f1f6f0}
 .rail{background:#124f30;color:#f5fbf0;border-right:1px solid #0e4529;padding:24px 16px}
 .rail .brand{display:flex;align-items:center;gap:12px;padding:0 4px}
 .brand-art{width:60px;height:60px;flex:none;display:grid;place-items:center;overflow:hidden;border:1px solid #cce9b7;border-radius:16px;background:#f8fff1}
 .brand-art img{width:100%;height:100%;object-fit:contain;transform:none}
 .brand-caption{padding:0;color:#fff;font-size:24px;line-height:1;font-weight:700;letter-spacing:.02em}
-.brand-caption small{font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;letter-spacing:0;color:#d4ebcb;line-height:1.45;margin-top:7px}
+.brand-caption small{font-family:'Noto Sans Thai',Tahoma,sans-serif;font-size:12px;font-weight:500;letter-spacing:0;color:#d4ebcb;line-height:1.45;margin-top:7px}
 .rail-label{margin:41px 10px 12px;color:#b6d8ae}
 .nav{gap:5px}
 .nav button{display:flex;align-items:center;gap:11px;min-height:46px;color:#e2f0dd;padding:10px 12px;line-height:1.35}
@@ -78,6 +78,31 @@ input:focus,select:focus,textarea:focus{border-color:#39885a}
 .ticket-actions .text-btn{color:#176c3b}
 .ticket-filter-actions #ticket-count{color:#55745e}
 .dialog-content h2{color:#173d2b}
+.eyebrow{font-family:'Noto Sans Thai',Tahoma,sans-serif;font-size:11px;font-weight:700;letter-spacing:.025em;text-transform:none}
+.hint,.performance-note,.dashboard-method-note{font-size:12.5px;line-height:1.7}
+.section-heading h3,#dashboard-view .dashboard-section-heading h3{line-height:1.35}
+.nav button{font-size:14px}
+.dashboard-hero .eyebrow{letter-spacing:.035em;font-size:12px}
+.dashboard-hero p{font-size:14px;line-height:1.7}
+.dashboard-hero-total span{font-size:13px}.dashboard-hero-total small{font-size:12px}
+.hero-button,.hero-text-link{font-size:13px}
+.dashboard-panel-heading h3{font-size:19px}
+#dashboard-view .metric-label,.dashboard-queue-empty strong,.queue-details strong{font-size:12px}
+.queue-details span,.dashboard-queue-item time,.dashboard-queue-empty span{font-size:11.5px}
+.dashboard-section-heading>p,.dashboard-scale{font-size:12px}
+.performance-person span:not(.avatar-fallback),.workload-summary span,#dashboard-view .performance-stats span{font-size:11.5px;line-height:1.45}
+.experience-detail strong{font-size:13px}.experience-detail>span{font-size:11.5px;line-height:1.45}
+#dashboard-view .matrix th{font-size:12px}
+.ticket-meta,.ticket-time,.ticket-actions .text-btn,.ticket-materials summary{font-size:13px}
+.ticket-detail,.ticket-reason{font-size:13px;line-height:1.6}
+.ticket-filters label,.dialog-content label,.inline-form label{font-size:13px}
+.ticket-filters input,.ticket-filters select,.dialog-content input,.dialog-content select,.dialog-content textarea{font-size:14px;min-height:42px}
+.bom-result span,.stock-result span,.bom-table,.stock-picker .hint{font-size:13px}
+.bom-result strong,.stock-result strong{font-size:12px}
+.status,.pill{font-size:12px}
+#ticket-dialog{max-height:92dvh;overflow:hidden}
+#ticket-dialog .dialog-content{max-height:92dvh;overflow-y:auto;overscroll-behavior:contain}
+#ticket-dialog .dialog-actions{position:sticky;bottom:-25px;margin:0 -25px -25px;padding:14px 25px 25px;background:#fff;border-top:1px solid #d9e6d9;z-index:1}
 @media(max-width:850px){.rail{padding:12px 16px}.rail .brand{gap:10px}.brand-art{width:46px;height:46px;border-radius:12px}.brand-caption{font-size:19px}.brand-caption small{font-size:10px;margin-top:4px}.rail-label{display:none}.nav{margin-top:12px;gap:5px}.nav button{justify-content:center;white-space:normal;min-height:44px;padding:8px 12px;flex:none}.nav button.active,.nav button:hover{box-shadow:inset 0 -3px #a2c841}.main{padding-top:20px}.topbar h1{font-size:23px}}
-@media(max-width:560px){.rail{padding:10px 12px}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.nav button{font-size:12px;gap:6px}.nav button span{width:auto}.topbar{align-items:start;gap:10px}.topbar .eyebrow{font-size:9px}.topbar h1{font-size:21px}.userbar{gap:5px}.userbar #edit-btn{font-size:11px;padding:7px 9px;min-height:38px}.userbar #refresh-btn{height:38px;width:38px;flex:none}.dashboard-hero{padding:22px}.dashboard-hero h2{font-size:27px}.hero-actions{gap:11px;flex-wrap:wrap}.dashboard-hero-total{border-color:#72ad73}.workload-summary strong{font-size:24px}.ticket-filter-actions>div{flex-wrap:wrap;gap:7px}.ticket-filter-actions .primary{flex:1}}
-@media print{body.print-tickets{background:#fff}.print-report header{border-color:#176c3b}.print-report header img{width:54px;height:54px;background:transparent;object-fit:contain}}
+@media(max-width:560px){.rail{padding:10px 12px}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.nav button{font-size:13px;gap:6px}.nav button span{width:auto}.topbar{align-items:start;gap:10px}.topbar .eyebrow{font-size:10px}.topbar h1{font-size:21px}.userbar{gap:5px}.userbar #edit-btn{font-size:12px;padding:7px 9px;min-height:40px}.userbar #refresh-btn{height:40px;width:40px;flex:none}.dashboard-hero{padding:22px}.dashboard-hero h2{font-size:27px}.hero-actions{gap:11px;flex-wrap:wrap}.dashboard-hero-total{border-color:#72ad73}.workload-summary strong{font-size:24px}.ticket-filter-actions>div{flex-wrap:wrap;gap:7px}.ticket-filter-actions .primary{flex:1}}
+@media print{body.print-tickets{background:#fff;font-family:'Noto Sans Thai',Tahoma,sans-serif}.print-report header{border-color:#176c3b}.print-report header img{width:54px;height:54px;background:transparent;object-fit:contain}}

@@ -3,6 +3,24 @@ const bangkokFormatter = new Intl.DateTimeFormat('en-GB', {
   hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
 });
 
+const bangkokDisplayFormatter = new Intl.DateTimeFormat('th-TH', {
+  dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Bangkok',
+});
+const bangkokClockFormatter = new Intl.DateTimeFormat('th-TH', {
+  hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok',
+});
+
+export function formatBangkokDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? bangkokDisplayFormatter.format(date) : '—';
+}
+
+export function formatBangkokClock(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? bangkokClockFormatter.format(date) : '—';
+}
+
 export function toBangkokInput(value) {
   if (!value) return '';
   const date = new Date(value);
