@@ -1,5 +1,5 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
-import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
+import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
 import { filterTickets } from './ticket-report.mjs';
 
 const $ = s => document.querySelector(s);
@@ -7,7 +7,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;',
 const fmt = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'short'}).format(new Date(v)) : '—';
 const fmtReport = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 sessionStorage.removeItem('editCode');
-const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,view:'dashboard'};
+const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,stock:null,stockLines:[],view:'dashboard'};
 const editing = () => state.verified && !!state.code;
 const supervisor = () => editing() && state.role==='supervisor';
 const operator = () => editing() && state.role==='operator';
@@ -21,7 +21,7 @@ const eventLabels={created:'สร้างใบเบิก',imported:'ข้�
 const eventConfig={pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
 let pendingEvent=null,editingTicketId=null;
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===$('#bom-select').value);
-function materialTable(lines){return `<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>อัตราต่อ 1 FG</th><th>จำนวนเบิกตามสูตร</th></tr></thead><tbody>${lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${qtyText(l.qty_per_unit)} ${esc(l.unit)}</td><td><strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></td></tr>`).join('')}</tbody></table></div>`;}
+function materialTable(lines){return `<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>ที่มา</th><th>จำนวนเบิก</th></tr></thead><tbody>${lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${l.source==='stock'?`นอก BOM · Stock ${esc(l.stock_report_date||'')}`:`BOM · ${qtyText(l.qty_per_unit)} ${esc(l.unit)} / FG`}</td><td><strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></td></tr>`).join('')}</tbody></table></div>`;}
 function renderBomOptions(){
   const term=$('#bom-search').value.trim().toLocaleLowerCase();
   const old=$('#bom-select').value;
@@ -32,12 +32,49 @@ function renderBomOptions(){
   renderBomPreview();
 }
 function renderBomPreview(){
+  if(!$('#bom-fields').hidden&& !state.bom){$('#bom-preview').innerHTML=empty('โหลด BOM ไม่สำเร็จ เลือกเบิกเฉพาะรายการ Stock ได้');return;}
   const f=chosenFormula(),qty=Number($('#ticket-form [name="requested_qty"]').value);
   if(!f){$('#bom-preview').innerHTML=empty('เลือกสูตรการผลิตเพื่อดูรายการวัตถุดิบ');return;}
   if(!Number.isFinite(qty)||qty<=0){$('#bom-preview').innerHTML=empty('ใส่จำนวนที่ต้องการผลิตเพื่อคำนวณวัสดุ');return;}
   if(f.lines.some(l=>!Number.isFinite(Number(l.qty_per_unit))||Number(l.qty_per_unit)<=0)){$('#bom-preview').innerHTML=empty('สูตรนี้มีอัตราใช้วัสดุไม่ครบ กรุณาตรวจสูตรใน PK WMS ก่อนสร้างใบเบิก');return;}
   const lines=f.lines.map(l=>({...l,required_qty:calcQty(l.qty_per_unit,qty)}));
   $('#bom-preview').innerHTML=`<div class="bom-summary"><strong>${esc(f.fg_code)} · ${esc(f.fg_name)}</strong><span>จำนวน ${qtyText(qty)} FG · ${lines.length} รายการวัสดุ</span></div>${materialTable(lines)}<p class="hint">จำนวนเบิกคำนวณตาม BOM (4 ตำแหน่ง) กรุณาตรวจสอบหน่วยและจำนวนจริงก่อนเบิก</p>`;
+}
+const stockMode=()=>document.querySelector('#ticket-form [name="source_mode"]:checked')?.value==='stock';
+function setTicketMode(){
+  const manual=stockMode();$('#bom-fields').hidden=manual;
+  $('#bom-select').required=!manual;
+  $('#ticket-form [name="requested_qty"]').required=!manual;
+  if(!manual)renderBomPreview();
+  renderStockMatch();
+}
+async function loadStockCatalog(){
+  state.stock=null;
+  try{
+    const response=await fetch(`${PK_WMS_URL}/rest/v1/rpc/get_withdrawal_stock_catalog`,{method:'POST',headers:{apikey:PK_WMS_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:'{}',cache:'no-store'});
+    if(!response.ok)throw Error(`HTTP ${response.status}`);
+    const data=await response.json();
+    if(!Number.isInteger(data.snapshot_id)||!Array.isArray(data.items)||!data.items.length)throw Error('ไม่มีรายการ Stock ล่าสุด');
+    state.stock={...data,items:data.items.filter(item=>item.code&&item.name&&item.unit&&!item.unit_conflict)};
+    $('#stock-source').textContent=`Stock PK WMS ${data.report_date} · บันทึก ${fmt(data.snapshot_saved_at)} · ${state.stock.items.length} รหัส`;
+    $('#stock-codes').innerHTML=state.stock.items.map(item=>`<option value="${esc(item.code)}" label="${esc(item.name)}"></option>`).join('');
+    renderStockMatch();return true;
+  }catch(error){
+    $('#stock-source').textContent=`โหลด Stock ล่าสุดไม่สำเร็จ (${error.message}) · ยังเพิ่มรายการนอก BOM ไม่ได้`;
+    $('#stock-codes').innerHTML='';renderStockMatch();return false;
+  }
+}
+function currentStockItem(){const code=$('#stock-code').value.trim().toUpperCase();return state.stock?.items.find(item=>item.code===code);}
+function renderStockMatch(){
+  const input=$('#stock-code'),item=currentStockItem(),code=input.value.trim().toUpperCase();
+  const exists=state.stockLines.some(line=>line.pk_code===code);
+  const inBom=!stockMode()&&!!chosenFormula()?.lines.some(line=>line.pk_code.toUpperCase()===code);
+  $('#stock-match').textContent=!state.stock?'รอเชื่อมต่อ Stock ล่าสุด':!code?'พิมพ์รหัสเพื่อค้นหารายการ':!item?'ไม่พบรหัสนี้ใน Stock ล่าสุด':exists||inBom?'รหัสนี้อยู่ในใบเบิกแล้ว':`${item.name} · หน่วย ${item.unit}`;
+  $('#add-stock-line').disabled=!item||exists||inBom;
+}
+function renderStockLines(){
+  $('#stock-lines').innerHTML=state.stockLines.length?`<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส / รายการนอก BOM</th><th>จำนวน</th><th></th></tr></thead><tbody>${state.stockLines.map((line,index)=>`<tr><td><strong>${esc(line.pk_code)}</strong><small>${esc(line.pk_name)}</small></td><td>${qtyText(line.required_qty)} ${esc(line.unit)}</td><td><button type="button" class="text-btn" data-remove-stock="${index}" aria-label="ลบ ${esc(line.pk_code)}">ลบ</button></td></tr>`).join('')}</tbody></table></div>`:empty('ยังไม่มีรายการนอก BOM');
+  renderStockMatch();
 }
 async function loadBom(){
   if(state.bom)return true;
@@ -94,7 +131,7 @@ function ticketHtml(t){
   }
   actions+=button('history','ประวัติ');
   let duration='';if(t.started_at&&t.ended_at){const mins=Math.max(0,Math.round((new Date(t.ended_at)-new Date(t.started_at))/60000));duration=` · ${Math.floor(mins/60)} ชม. ${mins%60} นาที`;}
-  const bom=t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials"><summary>ดูวัตถุดิบตาม BOM ${t.materials.length} รายการ</summary>${materialTable(t.materials)}</details>`:''}`:'';
+  const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials"><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
   return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value};}
@@ -126,7 +163,7 @@ function reportFiltersText(filters){
 function populateReport(list,filters){
   const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]++;});
   const rows=list.map((ticket,index)=>{
-    const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>วัสดุตาม BOM</strong><div>${ticket.materials.map(line=>`<span>${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)}</span>`).join('')}</div>`:'';
+    const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)}</span>`).join('')}</div>`:'';
     const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="9">${materials}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
     const status=statusLabels[ticket.status]||ticket.status;
     return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong></td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td></tr>${detail}</tbody>`;
@@ -169,6 +206,7 @@ async function openHistory(ticket){
 }
 
 document.addEventListener('click',async e=>{
+  const removeStock=e.target.closest('[data-remove-stock]');if(removeStock){state.stockLines.splice(Number(removeStock.dataset.removeStock),1);renderStockLines();return;}
   const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
   const action=e.target.closest('button[data-action]');if(action){
     const kind=action.dataset.action,ticket=state.tickets.find(t=>t.id===action.dataset.id);
@@ -209,11 +247,50 @@ $('#clear-ticket-filters').addEventListener('click',()=>{['#ticket-search','#tic
 $('#print-report-btn').addEventListener('click',printReport);
 window.addEventListener('beforeprint',()=>{if(document.body.classList.contains('print-tickets'))populateReport(selectedTickets(),ticketFilters());});
 window.addEventListener('afterprint',()=>document.body.classList.remove('print-tickets'));
-$('#new-ticket-btn').addEventListener('click',async()=>{const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}state.bom=null;if(!await loadBom())return;$('#ticket-form [name="job_type_id"]').innerHTML=jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');$('#ticket-form [name="assignee_id"]').innerHTML=people.map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join('');$('#bom-search').value='';renderBomOptions();$('#ticket-dialog').showModal();});
+$('#new-ticket-btn').addEventListener('click',async()=>{
+  const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
+  if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
+  state.bom=null;state.stockLines=[];$('#ticket-form').reset();
+  const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
+  if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
+  $('#ticket-form [name="job_type_id"]').innerHTML=jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
+  $('#ticket-form [name="assignee_id"]').innerHTML=people.map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join('');
+  $('#ticket-form [name="source_mode"][value="stock"]').checked=!bomLoaded;
+  if(bomLoaded)renderBomOptions();else $('#bom-select').innerHTML='<option value="">โหลด BOM ไม่สำเร็จ</option>';
+  renderStockLines();setTicketMode();$('#ticket-dialog').showModal();
+});
 $('#bom-search').addEventListener('input',renderBomOptions);
-$('#bom-select').addEventListener('change',renderBomPreview);
+$('#bom-select').addEventListener('change',()=>{renderBomPreview();renderStockMatch();});
 $('#ticket-form [name="requested_qty"]').addEventListener('input',renderBomPreview);
-$('#ticket-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),formula=chosenFormula(),qty=Number(f.get('requested_qty'));if(!formula||!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000){notice('เลือกสูตรและใส่จำนวน FG ที่ถูกต้อง',true);return;}if(formula.lines.some(l=>!Number.isFinite(Number(l.qty_per_unit))||Number(l.qty_per_unit)<=0)){notice('สูตรนี้มีอัตราใช้วัสดุไม่ครบ',true);return;}const lines=formula.lines.map(l=>({...l,required_qty:calcQty(l.qty_per_unit,qty)}));if(await mutate('create_bom_ticket_as_supervisor',{p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')).trim(),p_fg_code:formula.fg_code,p_fg_name:formula.fg_name,p_requested_qty:qty,p_bom_version:state.bom.source_sha256,p_materials:lines},'บันทึกใบเบิกพร้อมรายการ BOM แล้ว')){e.target.reset();$('#ticket-dialog').close();}});
+document.querySelectorAll('#ticket-form [name="source_mode"]').forEach(input=>input.addEventListener('change',setTicketMode));
+$('#stock-code').addEventListener('input',renderStockMatch);
+$('#add-stock-line').addEventListener('click',()=>{
+  const item=currentStockItem(),qty=Number($('#stock-qty').value);
+  if(!item){notice('เลือกรหัสที่มีอยู่ใน Stock ล่าสุด',true);return;}
+  if(!Number.isFinite(qty)||qty<=0||qty>1000000000||Math.round(qty*10000)!==qty*10000){notice('ใส่จำนวนเบิกที่ถูกต้อง ไม่เกิน 4 ตำแหน่งทศนิยม',true);return;}
+  if(state.stockLines.some(line=>line.pk_code===item.code)||!stockMode()&&chosenFormula()?.lines.some(line=>line.pk_code.toUpperCase()===item.code)){notice('รหัสนี้อยู่ในใบเบิกแล้ว',true);return;}
+  state.stockLines.push({source:'stock',pk_code:item.code,pk_name:item.name,unit:item.unit,required_qty:qty,stock_snapshot_id:state.stock.snapshot_id,stock_report_date:state.stock.report_date,stock_snapshot_saved_at:state.stock.snapshot_saved_at});
+  $('#stock-code').value='';$('#stock-qty').value='';renderStockLines();
+});
+$('#ticket-form').addEventListener('submit',async e=>{
+  e.preventDefault();const f=new FormData(e.target),manual=stockMode(),formula=manual?null:chosenFormula(),qty=manual?null:Number(f.get('requested_qty'));
+  if(!manual&&(!formula||!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000)){notice('เลือกสูตรและใส่จำนวน FG ที่ถูกต้อง',true);return;}
+  if(!manual&&formula.lines.some(line=>!Number.isFinite(Number(line.qty_per_unit))||Number(line.qty_per_unit)<=0)){notice('สูตรนี้มีอัตราใช้วัสดุไม่ครบ',true);return;}
+  if(manual&&!state.stockLines.length){notice('เพิ่มรหัสจาก Stock อย่างน้อย 1 รายการ',true);return;}
+  const bomLines=manual?[]:formula.lines.map(line=>({...line,required_qty:calcQty(line.qty_per_unit,qty)}));
+  if(state.stockLines.some(line=>bomLines.some(bom=>bom.pk_code.toUpperCase()===line.pk_code))){notice('รายการนอก BOM ซ้ำกับสูตรที่เลือก กรุณาลบรายการซ้ำ',true);return;}
+  if(state.stockLines.length){
+    if(!await loadStockCatalog()){notice('ยืนยันรหัสกับ Stock ล่าสุดไม่สำเร็จ กรุณาลองใหม่',true);return;}
+    for(const line of state.stockLines){
+      const latest=state.stock.items.find(item=>item.code===line.pk_code);
+      if(!latest||latest.unit!==line.unit){notice(`รหัส ${line.pk_code} ไม่ตรงกับ Stock ล่าสุด กรุณาตรวจรายการใหม่`,true);return;}
+      line.pk_name=latest.name;line.stock_snapshot_id=state.stock.snapshot_id;
+      line.stock_report_date=state.stock.report_date;line.stock_snapshot_saved_at=state.stock.snapshot_saved_at;
+    }
+  }
+  const args={p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_fg_code:formula?.fg_code||null,p_fg_name:formula?.fg_name||null,p_requested_qty:qty,p_bom_version:formula?state.bom.source_sha256:null,p_bom_materials:bomLines,p_stock_lines:state.stockLines};
+  if(await mutate('create_withdrawal_ticket_as_supervisor',args,'บันทึกใบเบิกแล้ว')){e.target.reset();state.stockLines=[];$('#ticket-dialog').close();}
+});
 $('#staff-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_staff_as_supervisor',{p_name:name},'เพิ่มพนักงานแล้ว'))e.target.reset();});
 $('#job-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_job_as_supervisor',{p_name:name},'เพิ่มประเภทงานแล้ว'))e.target.reset();});
 document.addEventListener('change',async e=>{let fn,args;if(e.target.matches('[data-active]')){fn='set_staff_active_as_supervisor';args={p_staff_id:e.target.dataset.active,p_active:e.target.checked};}else if(e.target.matches('[data-job-active]')){fn='set_job_active_as_supervisor';args={p_job_id:e.target.dataset.jobActive,p_active:e.target.checked};}else if(e.target.matches('[data-skill]')){fn='set_skill_rating_as_supervisor';args={p_staff_id:e.target.dataset.skill,p_job_id:e.target.dataset.job,p_level:Number(e.target.value)};}else return;await mutate(fn,args,'บันทึกแล้ว');});
