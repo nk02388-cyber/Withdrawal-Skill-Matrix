@@ -2,6 +2,7 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
 import { filterTickets } from './ticket-report.mjs';
 import { automaticSkill, personPerformance } from './skill-metrics.mjs';
+import { matchesKeywords, searchStock } from './stock-search.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -34,9 +35,9 @@ let pendingEvent=null,editingTicketId=null;
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===$('#bom-select').value);
 function materialTable(lines){return `<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>ที่มา</th><th>จำนวนเบิก</th></tr></thead><tbody>${lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${l.source==='stock'?`นอก BOM · Stock ${esc(l.stock_report_date||'')}`:`BOM · ${qtyText(l.qty_per_unit)} ${esc(l.unit)} / FG`}</td><td><strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></td></tr>`).join('')}</tbody></table></div>`;}
 function renderBomOptions(){
-  const term=$('#bom-search').value.trim().toLocaleLowerCase();
+  const term=$('#bom-search').value.trim();
   const old=$('#bom-select').value;
-  const matches=state.bom.formulas.filter(f=>(`${f.fg_code} ${f.fg_name}`).toLocaleLowerCase().includes(term)).slice(0,50);
+  const matches=state.bom.formulas.filter(f=>matchesKeywords(f.fg_code,f.fg_name,term)).slice(0,50);
   $('#bom-select').innerHTML='<option value="">เลือกสินค้า FG</option>'+matches.map(f=>`<option value="${esc(f.fg_code)}">${esc(f.fg_code)} · ${esc(f.fg_name)}</option>`).join('');
   if(matches.some(f=>f.fg_code===old))$('#bom-select').value=old;
   $('#bom-source').textContent=`สูตรจาก PK WMS · ${state.bom.formulas.length} สินค้า · แสดง ${matches.length} รายการแรก${term?' ที่ตรงกับคำค้น':''} · ไม่รวมยอดสต็อก`;
@@ -68,19 +69,23 @@ async function loadStockCatalog(){
     if(!Number.isInteger(data.snapshot_id)||!Array.isArray(data.items)||!data.items.length)throw Error('ไม่มีรายการ Stock ล่าสุด');
     state.stock={...data,items:data.items.filter(item=>item.code&&item.name&&item.unit&&!item.unit_conflict)};
     $('#stock-source').textContent=`Stock PK WMS ${data.report_date} · บันทึก ${fmt(data.snapshot_saved_at)} · ${state.stock.items.length} รหัส`;
-    $('#stock-codes').innerHTML=state.stock.items.map(item=>`<option value="${esc(item.code)}" label="${esc(item.name)}"></option>`).join('');
     renderStockMatch();return true;
   }catch(error){
     $('#stock-source').textContent=`โหลด Stock ล่าสุดไม่สำเร็จ (${error.message}) · ยังเพิ่มรายการนอก BOM ไม่ได้`;
-    $('#stock-codes').innerHTML='';renderStockMatch();return false;
+    renderStockMatch();return false;
   }
 }
 function currentStockItem(){const code=$('#stock-code').value.trim().toUpperCase();return state.stock?.items.find(item=>item.code===code);}
 function renderStockMatch(){
-  const input=$('#stock-code'),item=currentStockItem(),code=input.value.trim().toUpperCase();
+  const input=$('#stock-code'),item=currentStockItem(),query=input.value.trim(),code=item?.code;
   const exists=state.stockLines.some(line=>line.pk_code===code);
   const inBom=!stockMode()&&!!chosenFormula()?.lines.some(line=>line.pk_code.toUpperCase()===code);
-  $('#stock-match').textContent=!state.stock?'รอเชื่อมต่อ Stock ล่าสุด':!code?'พิมพ์รหัสเพื่อค้นหารายการ':!item?'ไม่พบรหัสนี้ใน Stock ล่าสุด':exists||inBom?'รหัสนี้อยู่ในใบเบิกแล้ว':`${item.name} · หน่วย ${item.unit}`;
+  const {matches,total}=state.stock?searchStock(state.stock.items,query):{matches:[],total:0};
+  $('#stock-results').innerHTML=matches.map(row=>{
+    const duplicate=state.stockLines.some(line=>line.pk_code===row.code)||!stockMode()&&!!chosenFormula()?.lines.some(line=>line.pk_code.toUpperCase()===row.code);
+    return `<button type="button" class="stock-result" data-stock-choice="${esc(row.code)}" ${duplicate?'disabled':''}><strong>${esc(row.code)}</strong><span>${esc(row.name)}</span><small>${esc(row.unit)}${duplicate?' · อยู่ในใบเบิกแล้ว':''}</small></button>`;
+  }).join('');
+  $('#stock-match').textContent=!state.stock?'รอเชื่อมต่อ Stock ล่าสุด':!query?'พิมพ์รหัส ชื่อ หรือคำบางส่วนเพื่อค้นหา':item?(exists||inBom?'รหัสนี้อยู่ในใบเบิกแล้ว':`เลือก ${item.code} · ${item.name} · หน่วย ${item.unit}`):total?`พบ ${total} รายการ · เลือกรายการจากผลค้นหา${total>matches.length?` (แสดง ${matches.length} รายการแรก)` : ''}`:'ไม่พบรายการใน Stock ล่าสุด';
   $('#add-stock-line').disabled=!item||exists||inBom;
 }
 function renderStockLines(){
@@ -283,6 +288,13 @@ $('#bom-select').addEventListener('change',()=>{renderBomPreview();renderStockMa
 $('#ticket-form [name="requested_qty"]').addEventListener('input',renderBomPreview);
 document.querySelectorAll('#ticket-form [name="source_mode"]').forEach(input=>input.addEventListener('change',setTicketMode));
 $('#stock-code').addEventListener('input',renderStockMatch);
+$('#stock-results').addEventListener('click',e=>{
+  const choice=e.target.closest('[data-stock-choice]');
+  if(!choice||choice.disabled)return;
+  $('#stock-code').value=choice.dataset.stockChoice;
+  renderStockMatch();
+  $('#stock-qty').focus();
+});
 $('#add-stock-line').addEventListener('click',()=>{
   const item=currentStockItem(),qty=Number($('#stock-qty').value);
   if(!item){notice('เลือกรหัสที่มีอยู่ใน Stock ล่าสุด',true);return;}

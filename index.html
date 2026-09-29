@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="bom.css">
   <link rel="stylesheet" href="report.css?v=3">
   <link rel="stylesheet" href="events.css?v=1">
-  <link rel="stylesheet" href="stock.css?v=1">
+  <link rel="stylesheet" href="stock.css?v=2">
   <link rel="stylesheet" href="performance.css?v=1">
 </head>
 <body>
@@ -56,8 +56,8 @@
 
   <dialog id="ticket-dialog"><form id="ticket-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">NEW WITHDRAWAL</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>สร้างใบเบิก</h2><label>เลขที่ใบเบิก<input name="ticket_no" required maxlength="80" placeholder="เช่น WD-2026-001"></label><label>Job / ประเภทงาน<select name="job_type_id" required></select></label><label>มอบหมายให้<select name="assignee_id" required></select></label>
     <fieldset class="source-mode"><legend>ประเภทใบเบิก</legend><label><input type="radio" name="source_mode" value="bom" checked> ใช้ BOM และเพิ่มรายการนอกสูตรได้</label><label><input type="radio" name="source_mode" value="stock"> เบิกเฉพาะรายการจาก Stock</label></fieldset>
-    <div id="bom-fields"><div class="bom-picker"><div class="eyebrow">BOM / สูตรการผลิตจาก PK WMS</div><label>ค้นหารหัสหรือชื่อสินค้า FG<input id="bom-search" type="search" autocomplete="off" placeholder="พิมพ์รหัสหรือชื่อสินค้า"></label><label>เลือกสูตร<select id="bom-select" required><option value="">เลือกสินค้า FG</option></select></label><p id="bom-source" class="hint">กำลังรอโหลดสูตรจาก PK WMS</p></div><label>จำนวนที่ต้องการผลิตตามใบเบิก<input name="requested_qty" type="number" min="0.001" max="1000000" step="0.001" required placeholder="เช่น 1000"></label><div id="bom-preview" class="bom-preview" aria-live="polite"></div></div>
-    <div class="stock-picker"><div class="eyebrow">รายการนอก BOM · Stock จาก PK WMS</div><p id="stock-source" class="hint">กำลังรอโหลดรหัส Stock ล่าสุด</p><label>พิมพ์รหัส PK<input id="stock-code" type="search" list="stock-codes" autocomplete="off" placeholder="เช่น 31-0001-07-51"></label><datalist id="stock-codes"></datalist><p id="stock-match" class="hint" role="status">พิมพ์รหัสเพื่อค้นหารายการ</p><label>จำนวนที่ต้องการเบิก<input id="stock-qty" type="number" min="0.0001" max="1000000000" step="0.0001" placeholder="เช่น 100"></label><button id="add-stock-line" class="text-btn" type="button">+ เพิ่มรายการ</button><div id="stock-lines" class="stock-lines"></div><p class="hint">รหัสและหน่วยอ้างอิง Stock ล่าสุด จำนวนนี้ยังไม่ตัดสต็อกจริง</p></div>
+    <div id="bom-fields"><div class="bom-picker"><div class="eyebrow">BOM / สูตรการผลิตจาก PK WMS</div><label>ค้นหารหัส ชื่อ หรือ Keyword สินค้า FG<input id="bom-search" type="search" autocomplete="off" placeholder="เช่น 21-0001, โลชั่น หรือหลายคำ"></label><label>เลือกสูตร<select id="bom-select" required><option value="">เลือกสินค้า FG</option></select></label><p id="bom-source" class="hint">กำลังรอโหลดสูตรจาก PK WMS</p></div><label>จำนวนที่ต้องการผลิตตามใบเบิก<input name="requested_qty" type="number" min="0.001" max="1000000" step="0.001" required placeholder="เช่น 1000"></label><div id="bom-preview" class="bom-preview" aria-live="polite"></div></div>
+    <div class="stock-picker"><div class="eyebrow">รายการนอก BOM · Stock จาก PK WMS</div><p id="stock-source" class="hint">กำลังรอโหลดรหัส Stock ล่าสุด</p><label>ค้นหารหัส ชื่อ หรือ Keyword ของสินค้า<input id="stock-code" type="search" autocomplete="off" placeholder="เช่น 31-0001, ขวด หรือคำบางส่วน" aria-controls="stock-results"></label><p id="stock-match" class="hint" role="status">พิมพ์รหัส ชื่อ หรือคำบางส่วนเพื่อค้นหา</p><div id="stock-results" class="stock-results" aria-label="ผลการค้นหา Stock"></div><label>จำนวนที่ต้องการเบิก<input id="stock-qty" type="number" min="0.0001" max="1000000000" step="0.0001" placeholder="เช่น 100"></label><button id="add-stock-line" class="text-btn" type="button">+ เพิ่มรายการ</button><div id="stock-lines" class="stock-lines"></div><p class="hint">เลือกรายการจากผลค้นหาก่อนเพิ่ม จำนวนนี้ยังไม่ตัดสต็อกจริง</p></div>
     <label>หมายเหตุ<textarea name="description" rows="2" maxlength="1000" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea></label><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">บันทึกใบเบิก</button></div></form></dialog>
 
   <dialog id="event-dialog"><form id="event-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">WORK EVENT</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="event-title"></h2><p id="event-ticket" class="hint"></p><label>เหตุผล<textarea name="reason" rows="3" maxlength="1000" placeholder="ระบุสาเหตุหรือรายละเอียด"></textarea></label><p id="event-hint" class="hint"></p><div class="dialog-actions"><button type="button" class="text-btn" data-close>กลับ</button><button type="submit" class="primary">บันทึกเหตุการณ์</button></div></form></dialog>
@@ -66,6 +66,6 @@
 
   <dialog id="history-dialog"><div class="dialog-content"><div class="dialog-head"><div class="eyebrow">AUDIT HISTORY</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="history-title">ประวัติใบเบิก</h2><div id="history-list" class="history-list"></div><div class="dialog-actions"><button type="button" class="text-btn" data-close>ปิด</button></div></div></dialog>
 
-  <script type="module" src="app.js?v=6"></script>
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>
