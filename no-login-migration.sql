@@ -23,7 +23,7 @@ revoke all on public.profiles, public.job_types, public.tickets, public.skill_ra
 
 create or replace function public.check_edit_code(p_code text) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
-  select coalesce((select value = crypt(p_code, value) from public.app_settings where key='edit_code'), false);
+  select coalesce((select value = extensions.crypt(p_code, value) from public.app_settings where key='edit_code'), false);
 $$;
 revoke all on function public.check_edit_code(text) from public, anon, authenticated;
 
