@@ -4,6 +4,7 @@ import { filterTickets } from './ticket-report.mjs';
 import { automaticSkill, personPerformance } from './skill-metrics.mjs';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs';
+import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -110,6 +111,20 @@ async function loadBom(){
 }
 
 function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hidden=!msg;el.style.background=error?'#ffece8':'#e2f6f1';el.style.color=error?'#a74436':'#12685b';}
+function showTicketNumberConflict(){
+  const input=$('#ticket-form [name="ticket_no"]'),number=input.value.trim();
+  const suggestion=suggestTicketNumber(state.tickets,number);
+  $('#ticket-no-message').textContent=`เลขที่ใบเบิก ${number} มีอยู่แล้ว กรุณาใช้เลขอื่น`;
+  const button=$('#ticket-no-suggestion');button.hidden=!suggestion;
+  if(suggestion){button.textContent=`ใช้เลข ${suggestion}`;button.dataset.suggestion=suggestion;}
+  input.setAttribute('aria-invalid','true');input.focus();
+}
+function checkTicketNumber(){
+  const input=$('#ticket-form [name="ticket_no"]');
+  if(ticketNumberExists(state.tickets,input.value)){showTicketNumberConflict();return false;}
+  $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;
+  input.removeAttribute('aria-invalid');return true;
+}
 function syncLabel(msg,ok=false){$('#sync-label').textContent=msg;$('.sync-dot').classList.toggle('online',ok);}
 function updateMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.hidden=!supervisor());
@@ -291,6 +306,7 @@ $('#new-ticket-btn').addEventListener('click',async()=>{
   const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
   if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
   state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();
+  $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;$('#ticket-form [name="ticket_no"]').removeAttribute('aria-invalid');
   const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
   if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
   $('#ticket-form [name="job_type_id"]').innerHTML=jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
@@ -301,6 +317,8 @@ $('#new-ticket-btn').addEventListener('click',async()=>{
   renderStockLines();setTicketMode();$('#ticket-dialog').showModal();
 });
 $('#bom-search').addEventListener('input',renderBomOptions);
+$('#ticket-form [name="ticket_no"]').addEventListener('input',checkTicketNumber);
+$('#ticket-no-suggestion').addEventListener('click',e=>{const input=$('#ticket-form [name="ticket_no"]');input.value=e.currentTarget.dataset.suggestion;checkTicketNumber();input.focus();});
 $('#bom-results').addEventListener('click',e=>{
   const choice=e.target.closest('[data-bom-choice]');
   if(!choice)return;
@@ -328,6 +346,7 @@ $('#add-stock-line').addEventListener('click',()=>{
 });
 $('#ticket-form').addEventListener('submit',async e=>{
   e.preventDefault();const f=new FormData(e.target),manual=stockMode(),formula=manual?null:chosenFormula(),qty=manual?null:Number(f.get('requested_qty'));
+  if(!checkTicketNumber())return;
   if(!manual&&(!formula||!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000)){notice('เลือกสูตรและใส่จำนวน FG ที่ถูกต้อง',true);return;}
   if(!manual&&formula.lines.some(line=>!Number.isFinite(Number(line.qty_per_unit))||Number(line.qty_per_unit)<=0)){notice('สูตรนี้มีอัตราใช้วัสดุไม่ครบ',true);return;}
   if(manual&&!state.stockLines.length){notice('เพิ่มรหัสจาก Stock อย่างน้อย 1 รายการ',true);return;}
@@ -343,7 +362,13 @@ $('#ticket-form').addEventListener('submit',async e=>{
     }
   }
   const args={p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_fg_code:formula?.fg_code||null,p_fg_name:formula?.fg_name||null,p_requested_qty:qty,p_bom_version:formula?state.bom.source_sha256:null,p_bom_materials:bomLines,p_stock_lines:state.stockLines};
-  if(await mutate('create_withdrawal_ticket_as_supervisor',args,'บันทึกใบเบิกแล้ว')){e.target.reset();state.stockLines=[];$('#ticket-dialog').close();}
+  const {error}=await state.db.rpc('create_withdrawal_ticket_as_supervisor',{p_username:state.username,p_code:state.code,...args});
+  if(error){
+    if(isDuplicateTicketNumberError(error)){await load(true);showTicketNumberConflict();}
+    else notice(`บันทึกไม่สำเร็จ: ${error.message}`,true);
+    return;
+  }
+  e.target.reset();state.stockLines=[];$('#ticket-dialog').close();notice('บันทึกใบเบิกแล้ว');await load(true);
 });
 $('#staff-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_staff_as_supervisor',{p_name:name},'เพิ่มพนักงานแล้ว'))e.target.reset();});
 $('#job-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_job_as_supervisor',{p_name:name},'เพิ่มประเภทงานแล้ว'))e.target.reset();});

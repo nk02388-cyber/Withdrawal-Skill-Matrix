@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="logo.css">
-  <link rel="stylesheet" href="bom.css?v=2">
+  <link rel="stylesheet" href="bom.css?v=3">
   <link rel="stylesheet" href="report.css?v=3">
   <link rel="stylesheet" href="events.css?v=2">
   <link rel="stylesheet" href="stock.css?v=2">
@@ -54,7 +54,7 @@
 
   <dialog id="code-dialog"><form id="code-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">ROLE ACCESS</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>เข้าสู่โหมดทำงาน</h2><p class="hint">Dashboard และรายงานดูได้ทันทีโดยไม่ต้องใส่รหัส</p><label>สิทธิ์ที่ต้องการ<select name="role" id="role-select"><option value="supervisor">หัวหน้า · สร้าง แก้ไข และยกเลิกงาน</option><option value="operator">ผู้ปฏิบัติงาน · เริ่ม พัก และจบงาน</option></select></label><label>ชื่อผู้ใช้<input name="username" required autocomplete="username" placeholder="ชื่อผู้ใช้"></label><label>รหัสผ่าน<input name="code" type="password" required autocomplete="current-password"></label><p id="code-message" class="form-message" role="status"></p><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">เข้าสู่โหมด</button></div></form></dialog>
 
-  <dialog id="ticket-dialog"><form id="ticket-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">NEW WITHDRAWAL</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>สร้างใบเบิก</h2><label>เลขที่ใบเบิก<input name="ticket_no" required maxlength="80" placeholder="เช่น WD-2026-001"></label><label>Job / ประเภทงาน<select name="job_type_id" required></select></label><label>มอบหมายให้<select name="assignee_id" required></select></label>
+  <dialog id="ticket-dialog"><form id="ticket-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">NEW WITHDRAWAL</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>สร้างใบเบิก</h2><label>เลขที่ใบเบิก<input name="ticket_no" required maxlength="80" placeholder="เช่น WD-2026-001" aria-describedby="ticket-no-message"></label><p id="ticket-no-message" class="ticket-no-message" role="alert" aria-live="polite"></p><button id="ticket-no-suggestion" type="button" class="text-btn ticket-no-suggestion" hidden></button><label>Job / ประเภทงาน<select name="job_type_id" required></select></label><label>มอบหมายให้<select name="assignee_id" required></select></label>
     <fieldset class="source-mode"><legend>ประเภทใบเบิก</legend><label><input type="radio" name="source_mode" value="bom" checked> ใช้ BOM และเพิ่มรายการนอกสูตรได้</label><label><input type="radio" name="source_mode" value="stock"> เบิกเฉพาะรายการจาก Stock</label></fieldset>
     <div id="bom-fields"><div class="bom-picker"><div class="eyebrow">BOM / สูตรการผลิตจาก PK WMS</div><label>ค้นหารหัส ชื่อ หรือ Keyword สินค้า FG<input id="bom-search" type="search" autocomplete="off" placeholder="เช่น 21-0001, โลชั่น หรือหลายคำ" aria-controls="bom-results" required></label><p id="bom-source" class="hint" role="status">กำลังรอโหลดสูตรจาก PK WMS</p><div id="bom-results" class="bom-results" aria-label="ผลค้นหาสูตร FG"></div></div><label>จำนวนที่ต้องการผลิตตามใบเบิก<input name="requested_qty" type="number" min="0.001" max="1000000" step="0.001" required placeholder="เช่น 1000"></label><div id="bom-preview" class="bom-preview" aria-live="polite"></div></div>
     <div class="stock-picker"><div class="eyebrow">รายการนอก BOM · Stock จาก PK WMS</div><p id="stock-source" class="hint">กำลังรอโหลดรหัส Stock ล่าสุด</p><label>ค้นหารหัส ชื่อ หรือ Keyword ของสินค้า<input id="stock-code" type="search" autocomplete="off" placeholder="เช่น 31-0001, ขวด หรือคำบางส่วน" aria-controls="stock-results"></label><p id="stock-match" class="hint" role="status">พิมพ์รหัส ชื่อ หรือคำบางส่วนเพื่อค้นหา</p><div id="stock-results" class="stock-results" aria-label="ผลการค้นหา Stock"></div><label>จำนวนที่ต้องการเบิก<input id="stock-qty" type="number" min="0.0001" max="1000000000" step="0.0001" placeholder="เช่น 100"></label><button id="add-stock-line" class="text-btn" type="button">+ เพิ่มรายการ</button><div id="stock-lines" class="stock-lines"></div><p class="hint">เลือกรายการจากผลค้นหาก่อนเพิ่ม จำนวนนี้ยังไม่ตัดสต็อกจริง</p></div>
@@ -66,6 +66,6 @@
 
   <dialog id="history-dialog"><div class="dialog-content"><div class="dialog-head"><div class="eyebrow">AUDIT HISTORY</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="history-title">ประวัติใบเบิก</h2><div id="history-list" class="history-list"></div><div class="dialog-actions"><button type="button" class="text-btn" data-close>ปิด</button></div></div></dialog>
 
-  <script type="module" src="app.js?v=9"></script>
+  <script type="module" src="app.js?v=10"></script>
 </body>
 </html>

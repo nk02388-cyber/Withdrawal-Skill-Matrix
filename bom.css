@@ -17,6 +17,7 @@
 .bom-table td small{display:block;color:#647f8c;margin-top:2px}
 .bom-table th:nth-child(n+2),.bom-table td:nth-child(n+2){white-space:nowrap;text-align:right}
 .bom-preview .hint{margin:9px 0 0}.ticket-main{flex:1}
+.ticket-no-message{margin:-12px 0 0;color:#a74436;font-size:12px}.ticket-no-message:empty{display:none}.ticket-no-suggestion{justify-self:start;margin-top:-12px}
 .ticket-fg{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:10px;color:#186578;font-size:13px}
 .ticket-materials{margin-top:9px}.ticket-materials summary{cursor:pointer;color:#197d90;font-size:12px;font-weight:600}.ticket-materials .bom-table-wrap{max-width:850px}
 #ticket-dialog{width:min(100% - 30px,760px);max-height:90vh;overflow:auto}
