@@ -2,6 +2,10 @@
 
 เว็บแอปสำหรับมอบหมายใบเบิกให้พนักงาน บันทึกเวลาเริ่มและจบงาน และดู Skill Matrix รายคน ข้อมูลอยู่ใน Supabase โครงการ `Withdrawal Skill Matrix` จึงเปิดจากหลายเครื่องแล้วเห็นข้อมูลชุดเดียวกัน หน้าเว็บโฮสต์บน GitHub Pages
 
+**เว็บใช้งาน:** https://nk02388-cyber.github.io/Withdrawal-Skill-Matrix/
+
+**GitHub:** https://github.com/nk02388-cyber/Withdrawal-Skill-Matrix
+
 ## การใช้งาน
 
 1. สมัครบัญชีด้วยอีเมลและยืนยันอีเมลตามข้อความจาก Supabase
