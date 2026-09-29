@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#10283f">
-  <title>Skill Matrix | งานเบิกของ</title>
+  <meta name="theme-color" content="#135b35">
+  <title>BCL | งานเบิกของและ Skill Matrix</title>
+  <link rel="icon" href="assets/bcl-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -16,32 +17,33 @@
   <link rel="stylesheet" href="stock.css?v=2">
   <link rel="stylesheet" href="performance.css?v=1">
   <link rel="stylesheet" href="dashboard.css?v=2">
+  <link rel="stylesheet" href="bcl-theme.css?v=1">
 </head>
 <body>
   <div class="app-shell">
     <aside class="rail">
-      <div class="brand"><div class="brand-art"><img src="assets/pk-no1-logo.png" alt="PK No.1 Thailand Racing พีเค ทีม" width="1408" height="768"></div><span class="brand-caption">ระบบงานเบิกของ<small>SKILL MATRIX</small></span></div>
+      <div class="brand"><div class="brand-art"><img src="assets/bcl-logo.png" alt="โลโก้ BCL" width="868" height="956"></div><span class="brand-caption">BCL<small>งานเบิกของ · Skill Matrix</small></span></div>
       <div class="rail-label">พื้นที่ทำงาน</div>
       <nav id="nav" class="nav" aria-label="เมนูหลัก">
-        <button data-view="dashboard" class="active"><span>▦</span> ภาพรวมและ Skill Matrix</button>
-        <button data-view="tickets"><span>▤</span> งานเบิกของ</button>
+        <button data-view="dashboard" class="active" aria-current="page"><span>▦</span> ภาพรวม</button>
+        <button data-view="tickets"><span>▤</span> ใบเบิกของ</button>
         <button data-view="people" class="admin-only" hidden><span>♙</span> พนักงาน</button>
         <button data-view="settings" class="admin-only" hidden><span>⚙</span> ประเภทงานและทักษะ</button>
       </nav>
       <div class="rail-footer"><span class="sync-dot"></span><span id="sync-label">รอเชื่อมต่อ</span></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><div class="eyebrow">OPERATIONS / TIME & CAPABILITY</div><h1 id="page-title">ภาพรวมและ Skill Matrix</h1></div><div class="userbar"><span id="user-label">โหมดดูข้อมูล</span><button id="edit-btn" class="text-btn" type="button">เข้าสู่โหมดทำงาน</button><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่">↻</button></div></header>
+      <header class="topbar"><div><div class="eyebrow">BCL / WITHDRAWAL OPERATIONS</div><h1 id="page-title">ภาพรวม</h1></div><div class="userbar"><span id="user-label">โหมดดูข้อมูล</span><button id="edit-btn" class="text-btn" type="button">เข้าสู่โหมดทำงาน</button><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่" aria-label="โหลดข้อมูลใหม่">↻</button></div></header>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="dashboard-view" class="view">
-        <header class="dashboard-hero"><div class="dashboard-hero-copy"><div class="eyebrow">PK / WITHDRAWAL OPERATIONS</div><h2>ภาพรวมงานเบิกของ<br><span>และความพร้อมของทีม</span></h2><p>ติดตามสถานะใบเบิก ผลงานรายคน และประสบการณ์ราย Job จากงานที่บันทึกจริง</p></div><div class="dashboard-hero-total"><span>ใบเบิกทั้งหมด</span><strong id="dashboard-total">—</strong><small>ทุกสถานะ · รวมข้อมูลย้อนหลัง</small></div></header>
+        <header class="dashboard-hero"><div class="dashboard-hero-copy"><div class="eyebrow">BCL / TEAM OPERATIONS</div><h2>งานเบิกของ<br><span>และความพร้อมของทีม</span></h2><p>สถานะใบเบิก ผลงานรายคน และประสบการณ์แยกตาม Job จากข้อมูลที่บันทึกจริง</p><div class="hero-actions"><button type="button" class="hero-button" data-dashboard-tickets>ไปหน้าใบเบิก <span aria-hidden="true">→</span></button><a href="#matrix-heading" class="hero-text-link">ดู Skill Matrix ↓</a></div></div><div class="dashboard-hero-total"><span>ใบเบิกทั้งหมด</span><strong id="dashboard-total">—</strong><small>ทุกสถานะ · รวมข้อมูลย้อนหลัง</small></div></header>
         <div class="dashboard-overview"><section class="dashboard-panel dashboard-status-panel" aria-labelledby="status-heading"><div class="dashboard-panel-heading"><div><div class="eyebrow">WORK STATUS</div><h3 id="status-heading">สถานะใบเบิก</h3></div></div><div id="metrics" class="metrics"></div></section><section class="dashboard-panel dashboard-queue-panel" aria-labelledby="queue-heading"><div class="dashboard-panel-heading"><div><div class="eyebrow">IN PROGRESS</div><h3 id="queue-heading">งานที่กำลังทำและพักอยู่</h3></div><button type="button" class="dashboard-link" data-dashboard-tickets>ดูใบเบิกทั้งหมด <span aria-hidden="true">↗</span></button></div><div id="active-list" class="dashboard-queue-list"></div></section></div>
-        <div class="section-heading dashboard-section-heading"><div><div class="eyebrow">TEAM WORK RECORD</div><h3>ผลงานรายคน</h3></div><p>สรุปจากใบเบิกที่มอบหมายจริง</p></div>
+        <div class="section-heading dashboard-section-heading"><div><div class="eyebrow">TEAM WORK RECORD</div><h3>ผลงานรายคน</h3></div><p>ใบที่จบ · รายการวัสดุ · สถานะงาน</p></div>
         <div id="performance-list" class="performance-list"></div>
-        <p class="dashboard-method-note">อัตราจบงาน = งานจบ ÷ (งานจบ + เบิกไม่ครบ) · เวลามัธยฐานนับจากเริ่มถึงจบ รวมเวลาพัก · หากยังไม่มีงานปิดจะแสดง —</p>
+        <p class="dashboard-method-note">รายการวัสดุนับจากบรรทัดในใบเบิกที่จบ ไม่ใช่ยอดหยิบจริง · อัตราจบงาน = งานจบ ÷ (งานจบ + เบิกไม่ครบ) · เวลามัธยฐานรวมเวลาพัก</p>
         <section class="dashboard-matrix-section" aria-labelledby="matrix-heading"><div class="section-heading dashboard-section-heading"><div><div class="eyebrow">CAPABILITY MAP</div><h3 id="matrix-heading">Skill Matrix · ประสบการณ์ราย Job</h3></div><span class="dashboard-scale">ระดับประสบการณ์ 0–4 จากจำนวนใบที่จบ</span></div><div id="matrix" class="matrix-wrap"></div><p class="dashboard-method-note">จำนวนรายการคือบรรทัดวัสดุที่บันทึกในใบเบิกสถานะเสร็จแล้ว ไม่ใช่จำนวนที่ยืนยันว่าเบิกได้จริง และไม่รวมใบเบิกไม่ครบ <span>ระดับประสบการณ์: 0 = ยังไม่มี · 1 = 1–2 ใบ · 2 = 3–5 ใบ · 3 = 6–11 ใบ · 4 = 12 ใบขึ้นไป · ระดับที่หัวหน้าประเมินแสดงแยกในแต่ละ Job</span></p></section>
       </section>
-      <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>งานเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button" hidden>+ สร้างใบเบิก</button></div><div class="ticket-filters" aria-label="ค้นหาและกรองใบเบิก"><label>เลขที่ใบเบิก<input id="ticket-search" type="search" placeholder="ค้นหาเลขที่ใบเบิก" autocomplete="off"></label><label>พนักงาน<select id="ticket-person-filter"><option value="">ทุกคน</option></select></label><label>Job<select id="ticket-job-filter"><option value="">ทุก Job</option></select></label><label>วันที่สร้างจาก<input id="ticket-date-from" type="date"></label><label>ถึงวันที่<input id="ticket-date-to" type="date"></label><label>สถานะ<select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="paused">พักงาน</option><option value="done">เสร็จแล้ว</option><option value="partial">เบิกไม่ครบ</option><option value="cancelled">ยกเลิก</option></select></label></div><div class="ticket-filter-actions"><span id="ticket-count" class="hint" role="status"></span><div><button id="clear-ticket-filters" class="text-btn" type="button">ล้างตัวกรอง</button><button id="print-report-btn" class="primary" type="button">พิมพ์รายงาน / PDF</button></div></div><div id="ticket-list" class="ticket-list"></div></section>
+      <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>ใบเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button" hidden>+ สร้างใบเบิก</button></div><div class="ticket-filters" aria-label="ค้นหาและกรองใบเบิก"><label>เลขที่ใบเบิก<input id="ticket-search" type="search" placeholder="ค้นหาเลขที่ใบเบิก" autocomplete="off"></label><label>พนักงาน<select id="ticket-person-filter"><option value="">ทุกคน</option></select></label><label>Job<select id="ticket-job-filter"><option value="">ทุก Job</option></select></label><label>วันที่สร้างจาก<input id="ticket-date-from" type="date"></label><label>ถึงวันที่<input id="ticket-date-to" type="date"></label><label>สถานะ<select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="paused">พักงาน</option><option value="done">เสร็จแล้ว</option><option value="partial">เบิกไม่ครบ</option><option value="cancelled">ยกเลิก</option></select></label></div><div class="ticket-filter-actions"><span id="ticket-count" class="hint" role="status"></span><div><button id="clear-ticket-filters" class="text-btn" type="button">ล้างตัวกรอง</button><button id="print-report-btn" class="primary" type="button">พิมพ์รายงาน / PDF</button></div></div><div id="ticket-list" class="ticket-list"></div></section>
       <section id="people-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">TEAM DIRECTORY</div><h2>พนักงาน</h2></div></div><form id="staff-form" class="inline-form admin-only" hidden><label>ชื่อพนักงาน<input name="name" required maxlength="100" placeholder="ชื่อที่แสดงในใบเบิก"></label><button class="primary" type="submit">เพิ่มพนักงาน</button></form><div id="people-list" class="people-list"></div></section>
       <section id="settings-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">CAPABILITY SETUP</div><h2>ประเภทงานและระดับทักษะ</h2></div></div><form id="job-form" class="inline-form"><label>ชื่อ Job / ประเภทงาน<input name="name" required maxlength="80" placeholder="เช่น เบิกวัตถุดิบ"></label><button class="primary" type="submit">เพิ่มประเภทงาน</button></form><div id="job-list" class="job-list"></div><div class="section-heading secondary-heading"><div><div class="eyebrow">MANUAL ASSESSMENT</div><h3>กำหนดระดับทักษะ</h3></div></div><div id="skill-editor"></div></section>
     </main>

@@ -1,0 +1,83 @@
+:root{color:#193b2b;background:#f1f6f0}
+body{background:#f1f6f0}
+.rail{background:#124f30;color:#f5fbf0;border-right:1px solid #0e4529;padding:24px 16px}
+.rail .brand{display:flex;align-items:center;gap:12px;padding:0 4px}
+.brand-art{width:60px;height:60px;flex:none;display:grid;place-items:center;overflow:hidden;border:1px solid #cce9b7;border-radius:16px;background:#f8fff1}
+.brand-art img{width:100%;height:100%;object-fit:contain;transform:none}
+.brand-caption{padding:0;color:#fff;font-size:24px;line-height:1;font-weight:700;letter-spacing:.02em}
+.brand-caption small{font-family:'IBM Plex Sans Thai',sans-serif;font-size:11px;font-weight:500;letter-spacing:0;color:#d4ebcb;line-height:1.45;margin-top:7px}
+.rail-label{margin:41px 10px 12px;color:#b6d8ae}
+.nav{gap:5px}
+.nav button{display:flex;align-items:center;gap:11px;min-height:46px;color:#e2f0dd;padding:10px 12px;line-height:1.35}
+.nav button span{width:20px;color:#c2dfaa;line-height:1;text-align:center}
+.nav button.active,.nav button:hover{background:#e5f3da;color:#124d2d;box-shadow:inset 3px 0 #9bc72d}
+.nav button.active span,.nav button:hover span{color:#27713d}
+.rail-footer{border-color:#3d7951;color:#d4ebcb}
+.sync-dot.online{background:#b3e465}
+.main{max-width:1600px;padding-top:28px}
+.topbar{border-color:#cddfce;padding-bottom:22px}
+.topbar .eyebrow{color:#5c8263}
+.topbar h1{font-size:26px;color:#173d2b}
+.userbar{gap:10px}
+.userbar #user-label{color:#5c7862;font-weight:600}
+.text-btn{color:#166638}
+.icon-btn{color:#166638}
+.userbar #edit-btn{border:1px solid #b8d5bd;background:#fff;border-radius:9px;padding:9px 14px;min-height:42px}
+.userbar #edit-btn:hover{background:#e7f5df}
+.userbar #refresh-btn{border:1px solid #b8d5bd;background:#fff;border-radius:9px;width:42px;height:42px;font-size:22px}
+.primary{background:#176c3b;border-radius:9px;min-height:42px}
+.primary:hover{background:#0e552d}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #a9c93c;outline-offset:2px}
+input,select,textarea{border-color:#bad2bf;color:#173d2b}
+input:focus,select:focus,textarea:focus{border-color:#39885a}
+.notice{border:1px solid #d4e3ca}
+#dashboard-view{--dash-ink:#173d2b;--dash-muted:#617b68;--dash-line:#d4e2d4;--dash-teal:#197244}
+.dashboard-hero{background:linear-gradient(112deg,#125b35 0%,#176b3b 67%,#2b7943 100%);border:1px solid #0d5932;min-height:210px}
+.dashboard-hero:before{background:radial-gradient(circle at 82% 28%,rgba(190,229,98,.15) 0 17%,transparent 17.3%),repeating-linear-gradient(90deg,transparent 0 94px,rgba(215,245,174,.05) 95px 96px)}
+.dashboard-hero .eyebrow{color:#c6e58a}
+.dashboard-hero h2 span{color:#d8ed9d}
+.dashboard-hero p{color:#e1f0dd;max-width:560px}
+.dashboard-hero-total{border-color:#72ad73}
+.dashboard-hero-total span,.dashboard-hero-total small{color:#d8ebcf}
+.hero-actions{display:flex;align-items:center;gap:18px;margin-top:21px}
+.hero-button{border:0;border-radius:9px;background:#e6f4b8;color:#174e2c;padding:10px 16px;min-height:42px;font-weight:700}
+.hero-button:hover{background:#fff3c6}
+.hero-button span{margin-left:7px}
+.hero-text-link{color:#eef8dc;font-size:12px;font-weight:600;text-decoration:underline;text-underline-offset:4px}
+.dashboard-panel{border-color:#d7e5d6}
+.dashboard-panel-heading .eyebrow,#dashboard-view .dashboard-section-heading .eyebrow{color:#5d8661}
+#dashboard-view .metric{background:#f7faf5;border-color:#e1ebdd}
+#dashboard-view .metric-label{color:#617b68}
+#dashboard-view .metric-value{color:#17432e}
+.metric-active .metric-dot{background:#24914f}.metric-paused .metric-dot{background:#e5aa3d}.metric-done .metric-dot{background:#75ad24}.metric-partial .metric-dot{background:#d8775c}
+.metric-active .metric-value{color:#176c3b!important}.metric-paused .metric-value{color:#98651d!important}.metric-partial .metric-value{color:#aa5b43!important}
+.dashboard-link{color:#176c3b;min-height:40px}
+.queue-status{background:#ddf1df;color:#216b3b}
+.queue-details strong{color:#174b2f}
+.dashboard-queue-empty{border-color:#d4e3d1;color:#58755e}
+#dashboard-view .performance-card{border-color:#d4e2d4}
+#dashboard-view .performance-avatar{border-color:#d5e9cb;background:#f0f8e7}
+.workload-summary{display:grid;grid-template-columns:1fr 1.35fr;background:#eff7e9;border:1px solid #d9eacb;border-radius:10px;margin:0 0 17px;overflow:hidden}
+.workload-summary>div{padding:13px 12px;min-width:0}
+.workload-summary>div+div{border-left:1px solid #d9eacb}
+.workload-summary strong{display:block;font:600 26px/1.1 'IBM Plex Mono',monospace;color:#176c3b}
+.workload-summary span{display:block;font-size:10px;color:#5f7864;margin-top:5px;line-height:1.35}
+#dashboard-view .performance-stats{border-color:#e2eadf}
+#dashboard-view .performance-stats div{border-color:#e2eadf}
+#dashboard-view .performance-stats strong{color:#2a5140}
+.dashboard-method-note{color:#67806b}
+#dashboard-view .matrix th,#dashboard-view .matrix th:first-child{background:#eaf3e7;color:#315f3c}
+#dashboard-view .matrix tbody tr:hover td,#dashboard-view .matrix tbody tr:hover td:first-child{background:#f5faf1}
+.experience-detail strong{color:#244b31}
+.experience-detail .experience-assessment{color:#276b3e}
+.skill-badge,.level-1,.level-2,.level-3,.level-4{background:#e5f2db;color:#256a3e}
+.level-3{background:#d4ebc0;color:#245f32}.level-4{background:#c2e1a4;color:#174e2b}
+.ticket-filters,.ticket,.person-row,.job-row,.inline-form,.matrix-wrap{border-color:#d4e2d4}
+.ticket-code{color:#1a7141}
+.status.active{background:#e4f4df;color:#237144}.status.done{background:#e8f3da;color:#4e7627}
+.ticket-actions .text-btn{color:#176c3b}
+.ticket-filter-actions #ticket-count{color:#55745e}
+.dialog-content h2{color:#173d2b}
+@media(max-width:850px){.rail{padding:12px 16px}.rail .brand{gap:10px}.brand-art{width:46px;height:46px;border-radius:12px}.brand-caption{font-size:19px}.brand-caption small{font-size:10px;margin-top:4px}.rail-label{display:none}.nav{margin-top:12px;gap:5px}.nav button{justify-content:center;white-space:normal;min-height:44px;padding:8px 12px;flex:none}.nav button.active,.nav button:hover{box-shadow:inset 0 -3px #a2c841}.main{padding-top:20px}.topbar h1{font-size:23px}}
+@media(max-width:560px){.rail{padding:10px 12px}.nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:visible}.nav button{font-size:12px;gap:6px}.nav button span{width:auto}.topbar{align-items:start;gap:10px}.topbar .eyebrow{font-size:9px}.topbar h1{font-size:21px}.userbar{gap:5px}.userbar #edit-btn{font-size:11px;padding:7px 9px;min-height:38px}.userbar #refresh-btn{height:38px;width:38px;flex:none}.dashboard-hero{padding:22px}.dashboard-hero h2{font-size:27px}.hero-actions{gap:11px;flex-wrap:wrap}.dashboard-hero-total{border-color:#72ad73}.workload-summary strong{font-size:24px}.ticket-filter-actions>div{flex-wrap:wrap;gap:7px}.ticket-filter-actions .primary{flex:1}}
+@media print{body.print-tickets{background:#fff}.print-report header{border-color:#176c3b}.print-report header img{width:54px;height:54px;background:transparent;object-fit:contain}}

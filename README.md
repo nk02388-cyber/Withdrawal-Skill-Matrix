@@ -1,5 +1,7 @@
 # ระบบงานเบิกของและ Skill Matrix
 
+หน้าเว็บใช้โลโก้ BCL ที่แถบเมนู, favicon และรายงานพิมพ์ Dashboard เน้นยอดใบเบิก สถานะงาน และผลงานรายคน โดยแสดงจำนวนใบที่จบคู่กับจำนวนรายการวัสดุในใบที่จบก่อนตัวชี้วัดอื่น ปุ่มบนภาพรวมพาไปหน้าใบเบิกหรือ Skill Matrix ได้โดยตรง
+
 **เว็บใช้งาน:** https://nk02388-cyber.github.io/Withdrawal-Skill-Matrix/
 
 **GitHub:** https://github.com/nk02388-cyber/Withdrawal-Skill-Matrix
