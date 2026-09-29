@@ -146,7 +146,8 @@ async function load(silent=false){
 function render(){renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();}}
 function renderDashboard(){
   const t=state.tickets;
-  $('#metrics').innerHTML=[['ใบเบิกทั้งหมด',t.length],['รอดำเนินการ',t.filter(x=>x.status==='queued').length],['กำลังทำ',t.filter(x=>x.status==='active').length],['พักงาน',t.filter(x=>x.status==='paused').length],['เสร็จแล้ว',t.filter(x=>x.status==='done').length],['เบิกไม่ครบ',t.filter(x=>x.status==='partial').length],['ยกเลิก',t.filter(x=>x.status==='cancelled').length]].map(([label,value])=>`<div class="metric"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div>`).join('');
+  $('#dashboard-total').textContent=qtyText(t.length);
+  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<div class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(t.filter(x=>x.status===status).length)}</div></div>`).join('');
   const people=state.people.filter(p=>p.active).sort((a,b)=>{
     const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
@@ -154,10 +155,12 @@ function renderDashboard(){
   $('#performance-list').innerHTML=people.length?people.map(p=>{
     const perf=personPerformance(p.id,t);
     const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
-    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>${perf.total} ใบเบิกที่ได้รับ</span></div></div><div class="performance-stats"><div><strong>${perf.done}</strong><span>งานจบ</span></div><div><strong>${perf.partial}</strong><span>เบิกไม่ครบ</span></div><div><strong>${perf.open}</strong><span>รอดำเนินการ/กำลังทำ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
+    const closed=perf.done+perf.partial;
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(perf.total)} ใบเบิก</span></div></div><div class="performance-rate"><div><span class="rate-label">อัตราจบงาน</span><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong></div><small>จากงานที่ปิดแล้ว ${qtyText(closed)} งาน</small></div><div class="performance-track" role="img" aria-label="อัตราจบงาน ${perf.completionRate===null?'ยังไม่มีงานที่ปิด':`${perf.completionRate} เปอร์เซ็นต์`}"><span style="width:${perf.completionRate??0}%"></span></div><div class="performance-stats"><div><strong>${qtyText(perf.done)}</strong><span>จบงาน</span></div><div><strong>${qtyText(perf.partial)}</strong><span>เบิกไม่ครบ</span></div><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
   $('#matrix').innerHTML=!people.length||!jobs.length?empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก'):`<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(j=>`<th>${esc(j.name)}</th>`).join('')}</tr></thead><tbody>${people.map(p=>`<tr><td><div class="matrix-person">${personPortrait(p)}<span class="person-name">${esc(p.display_name)}</span></div></td>${jobs.map(j=>{const count=t.filter(x=>x.assignee_id===p.id&&x.job_type_id===j.id&&x.status==='done').length;const level=automaticSkill(count);const assessed=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<td><span class="skill-cell"><span class="skill-badge level-${level}" aria-label="Skill อัตโนมัติระดับ ${level}">${level}</span><span class="done-count">${count} งานจบ${assessed?`<br>หัวหน้า ${assessed}`:''}</span></span></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
-  const active=t.filter(x=>['active','paused'].includes(x.status)).slice(0,5);$('#active-list').innerHTML=active.length?active.map(ticketHtml).join(''):empty('ยังไม่มีงานที่กำลังทำหรือพักอยู่');
+  const active=t.filter(x=>['active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
+  $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานที่กำลังทำหรือพักอยู่</strong><span>ใบเบิกที่เริ่มงานแล้วจะแสดงที่นี่</span></div>`;
 }
 function ticketHtml(t){
   const status=statusLabels[t.status]||t.status;
@@ -259,6 +262,7 @@ async function openHistory(ticket){
 document.addEventListener('click',async e=>{
   const removeStock=e.target.closest('[data-remove-stock]');if(removeStock){state.stockLines.splice(Number(removeStock.dataset.removeStock),1);renderStockLines();return;}
   const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
+  if(e.target.closest('[data-dashboard-tickets]')){showView('tickets');return;}
   const action=e.target.closest('button[data-action]');if(action){
     const kind=action.dataset.action,ticket=state.tickets.find(t=>t.id===action.dataset.id);
     if(!ticket)return;

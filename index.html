@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="events.css?v=2">
   <link rel="stylesheet" href="stock.css?v=2">
   <link rel="stylesheet" href="performance.css?v=1">
+  <link rel="stylesheet" href="dashboard.css?v=1">
 </head>
 <body>
   <div class="app-shell">
@@ -33,16 +34,12 @@
       <header class="topbar"><div><div class="eyebrow">OPERATIONS / TIME & CAPABILITY</div><h1 id="page-title">ภาพรวมและ Skill Matrix</h1></div><div class="userbar"><span id="user-label">โหมดดูข้อมูล</span><button id="edit-btn" class="text-btn" type="button">เข้าสู่โหมดทำงาน</button><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่">↻</button></div></header>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="dashboard-view" class="view">
-        <div class="intro"><div><div class="eyebrow">สถานะงานจริง</div><h2>เห็นงาน เห็นเวลา<br><em>เห็นความพร้อมของทีม</em></h2><p>Skill อัตโนมัติและประสิทธิภาพคำนวณจากประวัติใบเบิกที่บันทึกจริง</p></div><div class="intro-symbol" aria-hidden="true">01<span>/ 04</span></div></div>
-        <div id="metrics" class="metrics"></div>
-        <div class="section-heading"><div><div class="eyebrow">TEAM PERFORMANCE</div><h3>ประสิทธิภาพรายคน</h3></div></div>
-        <p class="performance-note">อัตราจบงาน = งานจบ ÷ (งานจบ + เบิกไม่ครบ) · เวลามัธยฐานนับจากเริ่มถึงจบงาน รวมเวลาพัก · หากยังไม่มีงานปิดจะแสดง —</p>
+        <header class="dashboard-hero"><div class="dashboard-hero-copy"><div class="eyebrow">PK / WITHDRAWAL OPERATIONS</div><h2>ภาพรวมงานเบิกของ<br><span>และความพร้อมของทีม</span></h2><p>ติดตามสถานะใบเบิก ผลงานรายคน และทักษะจากงานที่บันทึกจริง</p></div><div class="dashboard-hero-total"><span>ใบเบิกทั้งหมด</span><strong id="dashboard-total">—</strong><small>ทุกสถานะ · รวมข้อมูลย้อนหลัง</small></div></header>
+        <div class="dashboard-overview"><section class="dashboard-panel dashboard-status-panel" aria-labelledby="status-heading"><div class="dashboard-panel-heading"><div><div class="eyebrow">WORK STATUS</div><h3 id="status-heading">สถานะใบเบิก</h3></div></div><div id="metrics" class="metrics"></div></section><section class="dashboard-panel dashboard-queue-panel" aria-labelledby="queue-heading"><div class="dashboard-panel-heading"><div><div class="eyebrow">IN PROGRESS</div><h3 id="queue-heading">งานที่กำลังทำและพักอยู่</h3></div><button type="button" class="dashboard-link" data-dashboard-tickets>ดูใบเบิกทั้งหมด <span aria-hidden="true">↗</span></button></div><div id="active-list" class="dashboard-queue-list"></div></section></div>
+        <div class="section-heading dashboard-section-heading"><div><div class="eyebrow">TEAM PERFORMANCE</div><h3>ประสิทธิภาพรายคน</h3></div><p>คำนวณจากใบเบิกที่มอบหมายจริง</p></div>
         <div id="performance-list" class="performance-list"></div>
-        <div class="section-heading"><div><div class="eyebrow">CAPABILITY MAP</div><h3>Skill Matrix อัตโนมัติ</h3></div></div>
-        <p class="performance-note">ระดับคำนวณแยกตาม Job จากจำนวนงานจบ: 0 = ยังไม่มี, 1 = 1–2 งาน, 2 = 3–5 งาน, 3 = 6–11 งาน, 4 = 12 งานขึ้นไป · ระดับที่หัวหน้าประเมินจะแสดงแยกในช่องเดียวกัน</p>
-        <div id="matrix" class="matrix-wrap"></div>
-        <div class="section-heading"><div><div class="eyebrow">ACTIVE QUEUE</div><h3>งานที่กำลังทำและพักอยู่</h3></div></div>
-        <div id="active-list" class="ticket-list"></div>
+        <p class="dashboard-method-note">อัตราจบงาน = งานจบ ÷ (งานจบ + เบิกไม่ครบ) · เวลามัธยฐานนับจากเริ่มถึงจบ รวมเวลาพัก · หากยังไม่มีงานปิดจะแสดง —</p>
+        <section class="dashboard-matrix-section" aria-labelledby="matrix-heading"><div class="section-heading dashboard-section-heading"><div><div class="eyebrow">CAPABILITY MAP</div><h3 id="matrix-heading">Skill Matrix อัตโนมัติ</h3></div><span class="dashboard-scale">ระดับ 0–4 จากจำนวนงานจบตาม Job</span></div><div id="matrix" class="matrix-wrap"></div><p class="dashboard-method-note">0 = ยังไม่มี · 1 = 1–2 งาน · 2 = 3–5 งาน · 3 = 6–11 งาน · 4 = 12 งานขึ้นไป <span>ระดับที่หัวหน้าประเมินแสดงแยกในช่องเดียวกัน</span></p></section>
       </section>
       <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>งานเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button" hidden>+ สร้างใบเบิก</button></div><div class="ticket-filters" aria-label="ค้นหาและกรองใบเบิก"><label>เลขที่ใบเบิก<input id="ticket-search" type="search" placeholder="ค้นหาเลขที่ใบเบิก" autocomplete="off"></label><label>พนักงาน<select id="ticket-person-filter"><option value="">ทุกคน</option></select></label><label>Job<select id="ticket-job-filter"><option value="">ทุก Job</option></select></label><label>วันที่สร้างจาก<input id="ticket-date-from" type="date"></label><label>ถึงวันที่<input id="ticket-date-to" type="date"></label><label>สถานะ<select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="paused">พักงาน</option><option value="done">เสร็จแล้ว</option><option value="partial">เบิกไม่ครบ</option><option value="cancelled">ยกเลิก</option></select></label></div><div class="ticket-filter-actions"><span id="ticket-count" class="hint" role="status"></span><div><button id="clear-ticket-filters" class="text-btn" type="button">ล้างตัวกรอง</button><button id="print-report-btn" class="primary" type="button">พิมพ์รายงาน / PDF</button></div></div><div id="ticket-list" class="ticket-list"></div></section>
       <section id="people-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">TEAM DIRECTORY</div><h2>พนักงาน</h2></div></div><form id="staff-form" class="inline-form admin-only" hidden><label>ชื่อพนักงาน<input name="name" required maxlength="100" placeholder="ชื่อที่แสดงในใบเบิก"></label><button class="primary" type="submit">เพิ่มพนักงาน</button></form><div id="people-list" class="people-list"></div></section>
@@ -66,6 +63,6 @@
 
   <dialog id="history-dialog"><div class="dialog-content"><div class="dialog-head"><div class="eyebrow">AUDIT HISTORY</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="history-title">ประวัติใบเบิก</h2><div id="history-list" class="history-list"></div><div class="dialog-actions"><button type="button" class="text-btn" data-close>ปิด</button></div></div></dialog>
 
-  <script type="module" src="app.js?v=10"></script>
+  <script type="module" src="app.js?v=11"></script>
 </body>
 </html>

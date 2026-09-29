@@ -1,0 +1,72 @@
+#dashboard-view{--dash-ink:#183247;--dash-muted:#607989;--dash-line:#d7e4e9;--dash-teal:#0c8190;--dash-surface:#fff;padding-top:22px}
+.dashboard-hero{display:flex;align-items:stretch;justify-content:space-between;gap:28px;min-height:216px;padding:33px 36px;border-radius:18px;color:#f6fbfd;background:linear-gradient(105deg,#102b41 0%,#17465a 72%,#175265 100%);overflow:hidden;position:relative}
+.dashboard-hero:before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 77px,rgba(170,226,229,.055) 78px 79px),repeating-linear-gradient(0deg,transparent 0 55px,rgba(170,226,229,.045) 56px 57px);pointer-events:none}
+.dashboard-hero-copy,.dashboard-hero-total{position:relative;z-index:1}
+.dashboard-hero .eyebrow{color:#7cd8db;letter-spacing:.18em}
+.dashboard-hero h2{font-size:clamp(26px,3vw,40px);line-height:1.24;letter-spacing:-.035em;margin:13px 0 12px;font-weight:700}
+.dashboard-hero h2 span{color:#80d8dc}
+.dashboard-hero p{margin:0;color:#bfdae2;font-size:13px;line-height:1.6}
+.dashboard-hero-total{border-left:1px solid rgba(185,221,231,.3);padding:10px 0 6px 35px;min-width:205px;display:flex;flex-direction:column;justify-content:center}
+.dashboard-hero-total span{font-size:12px;color:#b9d7df}
+.dashboard-hero-total strong{font-family:'IBM Plex Mono',monospace;font-size:clamp(48px,5vw,70px);line-height:1.1;letter-spacing:-.06em;font-weight:600;color:#fff;margin:5px 0}
+.dashboard-hero-total small{color:#a4c6d0;font-size:11px}
+.dashboard-overview{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(310px,.9fr);gap:18px;margin-top:20px}
+.dashboard-panel{background:#fff;border:1px solid var(--dash-line);border-radius:15px;padding:22px;min-width:0;box-shadow:0 4px 24px rgba(18,52,70,.035)}
+.dashboard-panel-heading{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:16px}
+.dashboard-panel-heading .eyebrow{color:#548192}
+.dashboard-panel-heading h3{font-size:19px;color:var(--dash-ink);margin:3px 0 0;line-height:1.25}
+#dashboard-view .metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:0}
+#dashboard-view .metric{border:1px solid #e1ebef;border-radius:10px;background:#f8fbfc;padding:13px 15px;min-width:0}
+#dashboard-view .metric-label{display:flex;align-items:center;gap:7px;color:var(--dash-muted);font-size:11px;white-space:nowrap}
+#dashboard-view .metric-value{font-size:27px;line-height:1.2;margin:11px 0 0;color:var(--dash-ink)}
+.metric-dot{width:7px;height:7px;flex:none;border-radius:50%;background:#8ba5b1}
+.metric-active .metric-dot{background:#08a07d}.metric-paused .metric-dot{background:#e8a536}.metric-done .metric-dot{background:#2f80bd}.metric-partial .metric-dot{background:#db785b}.metric-cancelled .metric-dot{background:#9b9ba7}
+.metric-active .metric-value{color:#086f65!important}.metric-paused .metric-value{color:#9a6815!important}.metric-partial .metric-value{color:#b45e45!important}
+.dashboard-link{border:0;background:transparent;color:#0a7182;font-size:11px;font-weight:700;white-space:nowrap;padding:5px;border-radius:5px}
+.dashboard-link:hover{text-decoration:underline}.dashboard-link span{font-size:14px}
+.dashboard-queue-list{display:grid;gap:0}
+.dashboard-queue-item{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:11px;row-gap:4px;align-items:start;padding:11px 0;border-top:1px solid #e8eff2}
+.dashboard-queue-item:first-child{border-top:0;padding-top:1px}
+.queue-status{display:inline-block;min-width:68px;text-align:center;border-radius:5px;background:#e0f3ef;color:#0b786b;font-size:10px;font-weight:700;padding:5px 7px;white-space:nowrap}
+.queue-status.paused{background:#fff0d4;color:#93620e}
+.queue-details{display:flex;flex-direction:column;min-width:0;gap:2px}
+.queue-details strong{font-family:'IBM Plex Mono',monospace;color:#1c4b63;font-size:12px;overflow-wrap:anywhere}
+.queue-details span{font-size:11px;color:#607989;line-height:1.4;overflow-wrap:anywhere}
+.dashboard-queue-item time{grid-column:2;font-size:10px;color:#86a0ab}
+.dashboard-queue-empty{display:flex;flex-direction:column;justify-content:center;min-height:137px;gap:5px;border:1px dashed #d9e6ea;border-radius:9px;text-align:center;color:#546f80;padding:15px}
+.dashboard-queue-empty strong{font-size:12px}.dashboard-queue-empty span{font-size:11px;color:#829aa5}
+#dashboard-view .dashboard-section-heading{align-items:end;margin:37px 0 15px}
+#dashboard-view .dashboard-section-heading h3{font-size:23px;color:var(--dash-ink);margin:3px 0 0}
+.dashboard-section-heading>p,.dashboard-scale{font-size:11px;color:var(--dash-muted);margin:0 0 3px;text-align:right}
+#dashboard-view .performance-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+#dashboard-view .performance-card{border:1px solid var(--dash-line);border-radius:14px;padding:19px;box-shadow:0 4px 24px rgba(18,52,70,.035)}
+#dashboard-view .performance-person{margin-bottom:20px}
+#dashboard-view .performance-avatar{width:60px;height:60px;line-height:60px;border-radius:11px;border:1px solid #d9e9ed}
+#dashboard-view .performance-person h4{font-size:17px;color:var(--dash-ink)}
+#dashboard-view .performance-person span:not(.avatar-fallback){display:block;margin-top:4px;color:var(--dash-muted)}
+.performance-rate{display:flex;align-items:end;justify-content:space-between;gap:8px;margin-bottom:10px}
+.performance-rate>div{display:flex;flex-direction:column;gap:1px}
+.rate-label{color:#627f8d;font-size:11px}
+.performance-rate strong{font-family:'IBM Plex Mono',monospace;font-size:30px;line-height:1.1;letter-spacing:-.04em;color:#087b86}
+.performance-rate small{font-size:10px;color:#8199a4;text-align:right;padding-bottom:3px}
+.performance-track{height:7px;background:#e5f0f2;border-radius:8px;overflow:hidden;margin-bottom:18px}
+.performance-track span{display:block;height:100%;background:linear-gradient(90deg,#0e8090,#54bdba);border-radius:inherit}
+#dashboard-view .performance-stats{grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border-top:1px solid #e5edef;padding-top:14px}
+#dashboard-view .performance-stats div{background:transparent;border-radius:0;padding:1px 8px;text-align:center;border-right:1px solid #e5edef}
+#dashboard-view .performance-stats div:first-child{padding-left:0}#dashboard-view .performance-stats div:last-child{border-right:0;padding-right:0}
+#dashboard-view .performance-stats strong{font-size:16px;white-space:nowrap}#dashboard-view .performance-stats span{font-size:10px;line-height:1.3}
+.dashboard-method-note{font-size:11px;color:#6b8592;line-height:1.65;margin:10px 0 0}
+.dashboard-method-note span{display:block}
+.dashboard-matrix-section{margin-top:39px}
+.dashboard-matrix-section .section-heading{margin-bottom:15px!important}
+#dashboard-view .matrix-wrap{border:1px solid var(--dash-line);border-radius:14px;box-shadow:0 4px 24px rgba(18,52,70,.035)}
+#dashboard-view .matrix th{background:#edf4f6;color:#456c7c;font-size:11px}
+#dashboard-view .matrix th:first-child{background:#edf4f6}
+#dashboard-view .matrix th,#dashboard-view .matrix td{padding:16px;border-color:#e9eff2}
+#dashboard-view .matrix tbody tr:hover td{background:#f8fbfc}
+#dashboard-view .matrix tbody tr:hover td:first-child{background:#f8fbfc}
+#dashboard-view .skill-badge{width:33px;height:33px;border-radius:8px}
+#dashboard-view .done-count{font-size:10px;color:#6d8794}
+@media(max-width:1180px){.dashboard-overview{grid-template-columns:1fr}.dashboard-queue-list{grid-template-columns:repeat(2,minmax(0,1fr));column-gap:18px}.dashboard-queue-item:nth-child(2){border-top:0;padding-top:1px}#dashboard-view .performance-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.dashboard-hero{padding:27px;min-height:auto}.dashboard-hero-total{min-width:155px;padding-left:22px}#dashboard-view .performance-list{grid-template-columns:1fr}}
+@media(max-width:560px){.dashboard-hero{display:block;padding:25px}.dashboard-hero h2{font-size:29px}.dashboard-hero-total{border-left:0;border-top:1px solid rgba(185,221,231,.3);padding:15px 0 0;margin-top:24px;min-width:0}.dashboard-hero-total strong{font-size:44px}.dashboard-panel{padding:17px}.dashboard-overview{gap:12px;margin-top:12px}#dashboard-view .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-queue-list{grid-template-columns:1fr}.dashboard-queue-item:nth-child(2){border-top:1px solid #e8eff2;padding-top:11px}.dashboard-section-heading{display:block}.dashboard-section-heading>p,.dashboard-scale{display:block;text-align:left;margin-top:6px}#dashboard-view .performance-card{padding:17px}}
