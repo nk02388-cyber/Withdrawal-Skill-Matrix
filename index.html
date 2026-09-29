@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10283f">
+  <title>Skill Matrix | งานเบิกของ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="rail">
+      <div class="brand"><span class="brand-mark">▣</span><span>WORKFLOW<span class="brand-sub">/ SKILL MATRIX</span></span></div>
+      <div class="rail-label">พื้นที่ทำงาน</div>
+      <nav id="nav" class="nav" aria-label="เมนูหลัก">
+        <button data-view="dashboard" class="active"><span>▦</span> ภาพรวมและ Skill Matrix</button>
+        <button data-view="tickets"><span>▤</span> งานเบิกของ</button>
+        <button data-view="people" class="admin-only"><span>♙</span> พนักงาน</button>
+        <button data-view="settings" class="admin-only"><span>⚙</span> ประเภทงานและทักษะ</button>
+      </nav>
+      <div class="rail-footer"><span class="sync-dot"></span><span id="sync-label">รอเชื่อมต่อ</span></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><div class="eyebrow">OPERATIONS / TIME & CAPABILITY</div><h1 id="page-title">ภาพรวมและ Skill Matrix</h1></div><div class="userbar"><span id="user-label"></span><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่">↻</button><button id="logout-btn" class="text-btn" type="button">ออกจากระบบ</button></div></header>
+      <div id="notice" class="notice" role="status" hidden></div>
+      <section id="dashboard-view" class="view">
+        <div class="intro"><div><div class="eyebrow">สถานะงานจริง</div><h2>เห็นงาน เห็นเวลา<br><em>เห็นความพร้อมของทีม</em></h2><p>ระดับทักษะประเมินโดยผู้ดูแล · จำนวนงานเสร็จมาจากประวัติใบเบิก</p></div><div class="intro-symbol" aria-hidden="true">01<span>/ 04</span></div></div>
+        <div id="metrics" class="metrics"></div>
+        <div class="section-heading"><div><div class="eyebrow">CAPABILITY MAP</div><h3>Skill Matrix</h3></div><span class="hint">0 ยังไม่ประเมิน · 1 เริ่มต้น · 2 ทำได้ · 3 ชำนาญ · 4 สอนงานได้</span></div>
+        <div id="matrix" class="matrix-wrap"></div>
+        <div class="section-heading"><div><div class="eyebrow">ACTIVE QUEUE</div><h3>งานที่กำลังทำ</h3></div></div>
+        <div id="active-list" class="ticket-list"></div>
+      </section>
+      <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>งานเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button">+ สร้างใบเบิก</button></div><div class="toolbar"><label>สถานะ <select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="done">เสร็จแล้ว</option></select></label><span id="ticket-count" class="hint"></span></div><div id="ticket-list" class="ticket-list"></div></section>
+      <section id="people-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">TEAM DIRECTORY</div><h2>พนักงาน</h2></div></div><p class="hint">พนักงานสมัครด้วยอีเมลก่อน ผู้ดูแลจึงเปิดสิทธิ์ใช้งานให้</p><div id="people-list" class="people-list"></div></section>
+      <section id="settings-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">CAPABILITY SETUP</div><h2>ประเภทงานและระดับทักษะ</h2></div></div><form id="job-form" class="inline-form"><label>ชื่อ Job / ประเภทงาน<input name="name" required maxlength="80" placeholder="เช่น เบิกวัตถุดิบ"></label><button class="primary" type="submit">เพิ่มประเภทงาน</button></form><div id="job-list" class="job-list"></div><div class="section-heading secondary-heading"><div><div class="eyebrow">MANUAL ASSESSMENT</div><h3>กำหนดระดับทักษะ</h3></div></div><div id="skill-editor"></div></section>
+    </main>
+  </div>
+
+  <div id="auth-overlay" class="overlay"><div class="auth-card"><div class="brand auth-brand"><span class="brand-mark">▣</span><span>WORKFLOW<span class="brand-sub">/ SKILL MATRIX</span></span></div><div class="eyebrow">บัญชีพนักงาน</div><h2>เข้าสู่พื้นที่งานเบิก</h2><p>ใช้บัญชีเดียวกันได้ทุกเครื่อง ข้อมูลจะอยู่ในฐานข้อมูลกลาง</p><form id="auth-form"><label>อีเมล<input name="email" type="email" required autocomplete="email"></label><label>รหัสผ่าน<input name="password" type="password" required minlength="6" autocomplete="current-password"></label><button id="auth-submit" class="primary" type="submit">เข้าสู่ระบบ</button></form><button id="auth-toggle" class="text-btn" type="button">ยังไม่มีบัญชี? สมัครใช้งาน</button><p id="auth-message" class="form-message" role="status"></p></div></div>
+
+  <dialog id="ticket-dialog"><form id="ticket-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">NEW WITHDRAWAL</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>สร้างใบเบิก</h2><label>เลขที่ใบเบิก<input name="ticket_no" required maxlength="80" placeholder="เช่น WD-2026-001"></label><label>Job / ประเภทงาน<select name="job_type_id" required></select></label><label>มอบหมายให้<select name="assignee_id" required></select></label><label>รายละเอียดของที่เบิก<textarea name="description" rows="3" maxlength="1000" placeholder="รายการและจำนวนตามใบเบิก"></textarea></label><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">บันทึกใบเบิก</button></div></form></dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
