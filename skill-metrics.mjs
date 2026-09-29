@@ -7,6 +7,17 @@ export function automaticSkill(completedCount) {
   return 0;
 }
 
+// Material rows are the planned lines saved with completed tickets, not confirmed picks.
+export function completedJobWorkload(personId, jobId, tickets) {
+  const completed = tickets.filter(ticket =>
+    ticket.assignee_id === personId && ticket.job_type_id === jobId && ticket.status === 'done'
+  );
+  return {
+    tickets: completed.length,
+    materialLines: completed.reduce((sum, ticket) => sum + (Array.isArray(ticket.materials) ? ticket.materials.length : 0), 0),
+  };
+}
+
 export function personPerformance(personId, tickets) {
   const own = tickets.filter(ticket => ticket.assignee_id === personId);
   const done = own.filter(ticket => ticket.status === 'done');

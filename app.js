@@ -1,7 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
 import { filterTickets } from './ticket-report.mjs';
-import { automaticSkill, personPerformance } from './skill-metrics.mjs';
+import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs';
 import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs';
@@ -144,6 +144,15 @@ async function load(silent=false){
   render();
 }
 function render(){renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();}}
+function renderExperienceMatrix(people,jobs,tickets){
+  if(!people.length||!jobs.length)return empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก');
+  return `<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(job=>`<th>${esc(job.name)}</th>`).join('')}</tr></thead><tbody>${people.map(person=>`<tr><td><div class="matrix-person">${personPortrait(person)}<span class="person-name">${esc(person.display_name)}</span></div></td>${jobs.map(job=>{
+    const workload=completedJobWorkload(person.id,job.id,tickets);
+    const level=automaticSkill(workload.tickets);
+    const assessed=state.skills.find(skill=>skill.profile_id===person.id&&skill.job_type_id===job.id)?.level||0;
+    return `<td><div class="experience-cell"><span class="skill-badge level-${level}" aria-label="ประสบการณ์ระดับ ${level}">${level}</span><div class="experience-detail"><strong>${qtyText(workload.tickets)} ใบจบ · ${qtyText(workload.materialLines)} รายการ</strong><span>รายการวัสดุตามใบเบิกที่จบ</span><span class="experience-assessment">หัวหน้าประเมิน: ${assessed?`ระดับ ${assessed}`:'ยังไม่ประเมิน'}</span></div></div></td>`;
+  }).join('')}</tr>`).join('')}</tbody></table>`;
+}
 function renderDashboard(){
   const t=state.tickets;
   $('#dashboard-total').textContent=qtyText(t.length);
@@ -158,7 +167,7 @@ function renderDashboard(){
     const closed=perf.done+perf.partial;
     return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(perf.total)} ใบเบิก</span></div></div><div class="performance-rate"><div><span class="rate-label">อัตราจบงาน</span><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong></div><small>จากงานที่ปิดแล้ว ${qtyText(closed)} งาน</small></div><div class="performance-track" role="img" aria-label="อัตราจบงาน ${perf.completionRate===null?'ยังไม่มีงานที่ปิด':`${perf.completionRate} เปอร์เซ็นต์`}"><span style="width:${perf.completionRate??0}%"></span></div><div class="performance-stats"><div><strong>${qtyText(perf.done)}</strong><span>จบงาน</span></div><div><strong>${qtyText(perf.partial)}</strong><span>เบิกไม่ครบ</span></div><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
-  $('#matrix').innerHTML=!people.length||!jobs.length?empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก'):`<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(j=>`<th>${esc(j.name)}</th>`).join('')}</tr></thead><tbody>${people.map(p=>`<tr><td><div class="matrix-person">${personPortrait(p)}<span class="person-name">${esc(p.display_name)}</span></div></td>${jobs.map(j=>{const count=t.filter(x=>x.assignee_id===p.id&&x.job_type_id===j.id&&x.status==='done').length;const level=automaticSkill(count);const assessed=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<td><span class="skill-cell"><span class="skill-badge level-${level}" aria-label="Skill อัตโนมัติระดับ ${level}">${level}</span><span class="done-count">${count} งานจบ${assessed?`<br>หัวหน้า ${assessed}`:''}</span></span></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+  $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);
   const active=t.filter(x=>['active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
   $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานที่กำลังทำหรือพักอยู่</strong><span>ใบเบิกที่เริ่มงานแล้วจะแสดงที่นี่</span></div>`;
 }

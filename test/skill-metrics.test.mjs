@@ -1,9 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { automaticSkill, personPerformance } from '../skill-metrics.mjs';
+import { automaticSkill, completedJobWorkload, personPerformance } from '../skill-metrics.mjs';
 
 test('automatic skill advances only on completed jobs', () => {
   assert.deepEqual([0, 1, 2, 3, 5, 6, 11, 12].map(automaticSkill), [0, 1, 1, 2, 2, 3, 3, 4]);
+});
+
+test('completed workload counts material rows within each person and job, excluding partial and open tickets', () => {
+  const tickets = [
+    {assignee_id:'a',job_type_id:'pick',status:'done',materials:[{pk_code:'1'},{pk_code:'2'}]},
+    {assignee_id:'a',job_type_id:'pick',status:'done',materials:[{pk_code:'1'}]},
+    {assignee_id:'a',job_type_id:'pick',status:'partial',materials:[{pk_code:'3'},{pk_code:'4'}]},
+    {assignee_id:'a',job_type_id:'pack',status:'done',materials:[{pk_code:'5'}]},
+    {assignee_id:'b',job_type_id:'pick',status:'done',materials:[{pk_code:'6'}]},
+    {assignee_id:'a',job_type_id:'pick',status:'queued',materials:[{pk_code:'7'}]},
+  ];
+  assert.deepEqual(completedJobWorkload('a','pick',tickets),{tickets:2,materialLines:3});
+  assert.deepEqual(completedJobWorkload('a','pack',tickets),{tickets:1,materialLines:1});
+  assert.deepEqual(completedJobWorkload('c','pick',tickets),{tickets:0,materialLines:0});
 });
 
 test('person performance excludes open and cancelled jobs from completion rate', () => {
