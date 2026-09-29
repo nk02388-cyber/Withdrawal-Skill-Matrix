@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#135b35">
+  <meta name="theme-color" content="#111315">
+  <script>try{document.documentElement.dataset.theme=localStorage.getItem('bcl-display-theme')==='light'?'light':'dark'}catch{document.documentElement.dataset.theme='dark'}</script>
   <title>BCL | งานเบิกของและ Skill Matrix</title>
   <link rel="icon" href="assets/bcl-logo.png" type="image/png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -19,6 +20,7 @@
   <link rel="stylesheet" href="dashboard.css?v=2">
   <link rel="stylesheet" href="bcl-theme.css?v=2">
   <link rel="stylesheet" href="haulix-inspired.css?v=1">
+  <link rel="stylesheet" href="light-mode.css?v=1">
 </head>
 <body>
   <div class="app-shell">
@@ -34,7 +36,7 @@
       <div class="rail-footer"><span class="sync-dot"></span><span id="sync-label">รอเชื่อมต่อ</span></div>
     </aside>
     <main class="main">
-      <header class="topbar"><div><div class="eyebrow">BCL · ระบบงานเบิกของ</div><h1 id="page-title">ภาพรวม</h1></div><div class="userbar"><span id="user-label">โหมดดูข้อมูล</span><button id="edit-btn" class="text-btn" type="button">เข้าสู่โหมดทำงาน</button><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่" aria-label="โหลดข้อมูลใหม่">↻</button></div></header>
+      <header class="topbar"><div><div class="eyebrow">BCL · ระบบงานเบิกของ</div><h1 id="page-title">ภาพรวม</h1></div><div class="userbar"><span id="user-label">โหมดดูข้อมูล</span><button id="theme-toggle" class="theme-toggle" type="button" aria-label="เปลี่ยนเป็นโหมดสว่าง" aria-pressed="true"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-name">โหมดมืด</span></button><button id="edit-btn" class="text-btn" type="button">เข้าสู่โหมดทำงาน</button><button id="refresh-btn" class="icon-btn" type="button" title="โหลดข้อมูลใหม่" aria-label="โหลดข้อมูลใหม่">↻</button></div></header>
       <div id="notice" class="notice" role="status" hidden></div>
       <section id="dashboard-view" class="view">
         <header class="dashboard-hero"><div class="dashboard-hero-copy"><div class="eyebrow">ภาพรวมงานเบิกของ</div><h2>งานเบิกของ<br><span>และความพร้อมของทีม</span></h2><p>ดูสถานะใบเบิก ปริมาณงานรายคน และประสบการณ์แยกตาม Job</p><div class="hero-actions"><button type="button" class="hero-button" data-dashboard-tickets>เปิดรายการใบเบิก <span aria-hidden="true">→</span></button><a href="#matrix-heading" class="hero-text-link">ดู Skill Matrix ↓</a></div></div><div class="dashboard-hero-total"><span>ใบเบิกทั้งหมด</span><strong id="dashboard-total">—</strong><small>ทุกสถานะ · รวมข้อมูลย้อนหลัง</small></div></header>
@@ -66,6 +68,6 @@
 
   <dialog id="history-dialog"><div class="dialog-content"><div class="dialog-head"><div class="eyebrow">ประวัติการแก้ไข</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="history-title">ประวัติใบเบิก</h2><div id="history-list" class="history-list"></div><div class="dialog-actions"><button type="button" class="text-btn" data-close>ปิด</button></div></div></dialog>
 
-  <script type="module" src="app.js?v=13"></script>
+  <script type="module" src="app.js?v=14"></script>
 </body>
 </html>

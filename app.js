@@ -308,6 +308,23 @@ $('#ticket-edit-form').addEventListener('submit',async e=>{
 });
 function clearRole(){state.role='';state.username='';state.code='';state.verified=false;['workRole','workUsername','workCode'].forEach(key=>sessionStorage.removeItem(key));}
 $('#edit-btn').addEventListener('click',()=>{if(editing()){clearRole();updateMode();notice('ออกจากโหมดทำงานแล้ว');}else $('#code-dialog').showModal();});
+const themeButton=$('#theme-toggle');
+function syncThemeButton(){
+  const dark=document.documentElement.dataset.theme!=='light';
+  themeButton.setAttribute('aria-pressed',String(dark));
+  themeButton.setAttribute('aria-label',dark?'เปลี่ยนเป็นโหมดสว่าง':'เปลี่ยนเป็นโหมดมืด');
+  themeButton.querySelector('.theme-icon').textContent=dark?'☾':'☀';
+  themeButton.querySelector('.theme-name').textContent=dark?'โหมดมืด':'โหมดสว่าง';
+  document.querySelector('meta[name="theme-color"]').content=dark?'#111315':'#f3f5f7';
+}
+themeButton.addEventListener('click',()=>{
+  const next=document.documentElement.dataset.theme==='light'?'dark':'light';
+  document.documentElement.dataset.theme=next;
+  try{localStorage.setItem('bcl-display-theme',next)}catch{}
+  syncThemeButton();
+});
+window.addEventListener('storage',e=>{if(e.key==='bcl-display-theme'){document.documentElement.dataset.theme=e.newValue==='light'?'light':'dark';syncThemeButton();}});
+syncThemeButton();
 $('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
 $('#refresh-btn').addEventListener('click',()=>load());
 ['#ticket-search','#ticket-date-from','#ticket-date-to'].forEach(selector=>$(selector).addEventListener('input',renderTickets));
