@@ -1,6 +1,7 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
 import { filterTickets } from './ticket-report.mjs';
+import { automaticSkill, personPerformance } from './skill-metrics.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,6 +14,16 @@ const supervisor = () => editing() && state.role==='supervisor';
 const operator = () => editing() && state.role==='operator';
 const empty = msg => `<div class="empty">${esc(msg)}</div>`;
 const nameFor = id => state.people.find(p=>p.id===id)?.display_name||'ไม่พบพนักงาน';
+const portraitFiles = {
+  'bee9c21d-d1a0-4f7a-8d75-c0cde7aa76e1':'assets/jirathit.jpg',
+  'c0da4eaa-ac39-459d-b324-44d6e0e44931':'assets/phurin.jpg',
+  '5da3ec7d-24cb-4639-8d8b-cac3a550753a':'assets/somon.jpg',
+};
+const featuredOrder = ['bee9c21d-d1a0-4f7a-8d75-c0cde7aa76e1','c0da4eaa-ac39-459d-b324-44d6e0e44931','5da3ec7d-24cb-4639-8d8b-cac3a550753a'];
+function personPortrait(person, className='person-avatar'){
+  const file=portraitFiles[person.id];
+  return file?`<img class="${className}" src="${file}" alt="ภาพ ${esc(person.display_name)}" loading="lazy" width="72" height="72">`:`<span class="${className} avatar-fallback" aria-hidden="true">${esc(person.display_name?.slice(0,1)||'?')}</span>`;
+}
 const jobFor = id => state.jobs.find(j=>j.id===id)?.name||'ไม่พบประเภทงาน';
 const qtyText = value => new Intl.NumberFormat('th-TH',{maximumFractionDigits:4}).format(Number(value));
 const calcQty = (rate, qty) => Math.round((Number(rate)*qty+Number.EPSILON)*10000)/10000;
@@ -112,8 +123,16 @@ function render(){renderDashboard();renderTickets();if(supervisor()){renderPeopl
 function renderDashboard(){
   const t=state.tickets;
   $('#metrics').innerHTML=[['ใบเบิกทั้งหมด',t.length],['รอดำเนินการ',t.filter(x=>x.status==='queued').length],['กำลังทำ',t.filter(x=>x.status==='active').length],['พักงาน',t.filter(x=>x.status==='paused').length],['เสร็จแล้ว',t.filter(x=>x.status==='done').length],['เบิกไม่ครบ',t.filter(x=>x.status==='partial').length],['ยกเลิก',t.filter(x=>x.status==='cancelled').length]].map(([label,value])=>`<div class="metric"><div class="metric-label">${label}</div><div class="metric-value">${value}</div></div>`).join('');
-  const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);
-  $('#matrix').innerHTML=!people.length||!jobs.length?empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก'):`<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(j=>`<th>${esc(j.name)}</th>`).join('')}</tr></thead><tbody>${people.map(p=>`<tr><td><span class="person-name">${esc(p.display_name)}</span></td>${jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;const count=t.filter(x=>x.assignee_id===p.id&&x.job_type_id===j.id&&x.status==='done').length;return `<td><span class="skill-cell"><span class="skill-badge level-${level}">${level}</span><span class="done-count">${count} งาน</span></span></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+  const people=state.people.filter(p=>p.active).sort((a,b)=>{
+    const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
+    return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
+  }),jobs=state.jobs.filter(j=>j.active);
+  $('#performance-list').innerHTML=people.length?people.map(p=>{
+    const perf=personPerformance(p.id,t);
+    const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>${perf.total} ใบเบิกที่ได้รับ</span></div></div><div class="performance-stats"><div><strong>${perf.done}</strong><span>งานจบ</span></div><div><strong>${perf.partial}</strong><span>เบิกไม่ครบ</span></div><div><strong>${perf.open}</strong><span>รอดำเนินการ/กำลังทำ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
+  }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
+  $('#matrix').innerHTML=!people.length||!jobs.length?empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก'):`<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(j=>`<th>${esc(j.name)}</th>`).join('')}</tr></thead><tbody>${people.map(p=>`<tr><td><div class="matrix-person">${personPortrait(p)}<span class="person-name">${esc(p.display_name)}</span></div></td>${jobs.map(j=>{const count=t.filter(x=>x.assignee_id===p.id&&x.job_type_id===j.id&&x.status==='done').length;const level=automaticSkill(count);const assessed=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<td><span class="skill-cell"><span class="skill-badge level-${level}" aria-label="Skill อัตโนมัติระดับ ${level}">${level}</span><span class="done-count">${count} งานจบ${assessed?`<br>หัวหน้า ${assessed}`:''}</span></span></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
   const active=t.filter(x=>['active','paused'].includes(x.status)).slice(0,5);$('#active-list').innerHTML=active.length?active.map(ticketHtml).join(''):empty('ยังไม่มีงานที่กำลังทำหรือพักอยู่');
 }
 function ticketHtml(t){
@@ -171,7 +190,7 @@ function populateReport(list,filters){
   $('#print-report').innerHTML=`<header><img src="assets/pk-no1-logo.png" alt="PK No.1"><div><h1>รายงานงานเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${list.length}</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>Job</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th></tr></thead>${rows||'<tbody><tr><td colspan="9">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก</p>`;
 }
 function printReport(){const list=selectedTickets();populateReport(list,ticketFilters());document.body.classList.add('print-tickets');window.print();}
-function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><strong>${esc(p.display_name)}</strong><div class="person-controls"><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
+function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
 function renderSettings(){const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);$('#job-list').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="job-row"><strong>${esc(j.name)}</strong><label class="hint"><input type="checkbox" data-job-active="${esc(j.id)}" ${j.active?'checked':''}> เปิดใช้งาน</label></div>`).join(''):empty('ยังไม่มีประเภทงาน');$('#skill-editor').innerHTML=!people.length||!jobs.length?empty('เพิ่มพนักงานและประเภทงานก่อนกำหนดทักษะ'):`<div class="matrix-wrap"><table class="skill-edit-table"><thead><tr><th>พนักงาน</th><th>Job</th><th>ระดับทักษะ</th></tr></thead><tbody>${people.flatMap(p=>jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<tr><td>${esc(p.display_name)}</td><td>${esc(j.name)}</td><td><select data-skill="${esc(p.id)}" data-job="${esc(j.id)}">${['ยังไม่ประเมิน','1 · เริ่มต้น','2 · ทำได้','3 · ชำนาญ','4 · สอนงานได้'].map((label,i)=>`<option value="${i}" ${i===level?'selected':''}>${label}</option>`).join('')}</select></td></tr>`})).join('')}</tbody></table></div>`;}
 async function mutate(fn,args,success){const {error}=await state.db.rpc(fn,{p_username:state.username,p_code:state.code,...args});if(error){notice(`บันทึกไม่สำเร็จ: ${error.message}`,true);return false;}notice(success);await load(true);return true;}
 function openEvent(kind,ticket){
