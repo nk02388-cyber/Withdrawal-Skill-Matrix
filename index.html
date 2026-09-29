@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="logo.css">
   <link rel="stylesheet" href="bom.css">
-  <link rel="stylesheet" href="report.css">
+  <link rel="stylesheet" href="report.css?v=2">
 </head>
 <body>
   <div class="app-shell">
@@ -49,6 +49,6 @@
 
   <dialog id="ticket-dialog"><form id="ticket-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">NEW WITHDRAWAL</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>สร้างใบเบิก</h2><label>เลขที่ใบเบิก<input name="ticket_no" required maxlength="80" placeholder="เช่น WD-2026-001"></label><label>Job / ประเภทงาน<select name="job_type_id" required></select></label><label>มอบหมายให้<select name="assignee_id" required></select></label><div class="bom-picker"><div class="eyebrow">BOM / สูตรการผลิตจาก PK WMS</div><label>ค้นหารหัสหรือชื่อสินค้า FG<input id="bom-search" type="search" autocomplete="off" placeholder="พิมพ์รหัสหรือชื่อสินค้า"></label><label>เลือกสูตร<select id="bom-select" required><option value="">เลือกสินค้า FG</option></select></label><p id="bom-source" class="hint">กำลังรอโหลดสูตรจาก PK WMS</p></div><label>จำนวนที่ต้องการผลิตตามใบเบิก<input name="requested_qty" type="number" min="0.001" max="1000000" step="0.001" required placeholder="เช่น 1000"></label><div id="bom-preview" class="bom-preview" aria-live="polite"></div><label>หมายเหตุ<textarea name="description" rows="2" maxlength="1000" placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"></textarea></label><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">บันทึกใบเบิก</button></div></form></dialog>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=2"></script>
 </body>
 </html>
