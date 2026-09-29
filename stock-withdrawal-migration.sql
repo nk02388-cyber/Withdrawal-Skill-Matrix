@@ -43,7 +43,7 @@ begin
   end loop;
   for line in select value from jsonb_array_elements(p_stock_lines) loop
     line_code := upper(trim(coalesce(line->>'pk_code','')));
-    if line->>'source' <> 'stock'
+    if line->>'source' is distinct from 'stock'
        or line_code !~ '^[A-Z0-9/._-]{1,80}$'
        or length(trim(coalesce(line->>'pk_name',''))) not between 1 and 300
        or length(trim(coalesce(line->>'unit',''))) not between 1 and 30
