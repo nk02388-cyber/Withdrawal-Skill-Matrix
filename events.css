@@ -16,4 +16,12 @@
 .history-actor{margin-top:3px}
 .history-event p{font-size:13px;margin:8px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
 .history-event ul{padding-left:18px;margin:8px 0 0;font-size:12px;overflow-wrap:anywhere}
-@media(max-width:560px){.ticket-actions{justify-content:flex-start;margin-left:0;max-width:none}.history-event-head{display:block}}
+#ticket-edit-dialog{width:min(100% - 30px,560px)}
+#ticket-edit-dialog .dialog-content{max-height:85vh;overflow-y:auto}
+.edit-time-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.edit-time-fields input{min-width:0}
+.edit-time-fields input:disabled{background:#edf2f4;color:#718692}
+#edit-time-hint{margin:-7px 0 0;line-height:1.5}
+.edit-message{min-height:0;margin:0;color:#a74436;font-size:12px;line-height:1.5}
+.edit-message:empty{display:none}
+@media(max-width:560px){.ticket-actions{justify-content:flex-start;margin-left:0;max-width:none}.history-event-head{display:block}.edit-time-fields{grid-template-columns:1fr}}

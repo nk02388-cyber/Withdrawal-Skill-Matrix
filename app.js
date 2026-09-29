@@ -3,11 +3,13 @@ import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_
 import { filterTickets } from './ticket-report.mjs';
 import { automaticSkill, personPerformance } from './skill-metrics.mjs';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
+import { fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'short'}).format(new Date(v)) : '—';
 const fmtReport = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'short',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
+const fmtAudit = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 sessionStorage.removeItem('editCode');
 const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,stock:null,stockLines:[],view:'dashboard'};
 const editing = () => state.verified && !!state.code;
@@ -197,7 +199,7 @@ function populateReport(list,filters){
 function printReport(){const list=selectedTickets();populateReport(list,ticketFilters());document.body.classList.add('print-tickets');window.print();}
 function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
 function renderSettings(){const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);$('#job-list').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="job-row"><strong>${esc(j.name)}</strong><label class="hint"><input type="checkbox" data-job-active="${esc(j.id)}" ${j.active?'checked':''}> เปิดใช้งาน</label></div>`).join(''):empty('ยังไม่มีประเภทงาน');$('#skill-editor').innerHTML=!people.length||!jobs.length?empty('เพิ่มพนักงานและประเภทงานก่อนกำหนดทักษะ'):`<div class="matrix-wrap"><table class="skill-edit-table"><thead><tr><th>พนักงาน</th><th>Job</th><th>ระดับทักษะ</th></tr></thead><tbody>${people.flatMap(p=>jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<tr><td>${esc(p.display_name)}</td><td>${esc(j.name)}</td><td><select data-skill="${esc(p.id)}" data-job="${esc(j.id)}">${['ยังไม่ประเมิน','1 · เริ่มต้น','2 · ทำได้','3 · ชำนาญ','4 · สอนงานได้'].map((label,i)=>`<option value="${i}" ${i===level?'selected':''}>${label}</option>`).join('')}</select></td></tr>`})).join('')}</tbody></table></div>`;}
-async function mutate(fn,args,success){const {error}=await state.db.rpc(fn,{p_username:state.username,p_code:state.code,...args});if(error){notice(`บันทึกไม่สำเร็จ: ${error.message}`,true);return false;}notice(success);await load(true);return true;}
+async function mutate(fn,args,success,errorTarget){const {error}=await state.db.rpc(fn,{p_username:state.username,p_code:state.code,...args});if(error){const message=`บันทึกไม่สำเร็จ: ${error.message}`;if(errorTarget)$(errorTarget).textContent=message;else notice(message,true);return false;}if(errorTarget)$(errorTarget).textContent='';notice(success);await load(true);return true;}
 function openEvent(kind,ticket){
   pendingEvent={kind,id:ticket.id};const config=eventConfig[kind],form=$('#event-form');
   form.reset();form.elements.reason.required=config.required;
@@ -207,6 +209,7 @@ function openEvent(kind,ticket){
 }
 function openEdit(ticket){
   editingTicketId=ticket.id;const form=$('#ticket-edit-form');form.reset();
+  $('#ticket-edit-message').textContent='';
   form.elements.ticket_no.value=ticket.ticket_no;
   form.elements.job_type_id.innerHTML=state.jobs.filter(j=>j.active||j.id===ticket.job_type_id).map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
   form.elements.assignee_id.innerHTML=state.people.filter(p=>p.active||p.id===ticket.assignee_id).map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join('');
@@ -214,12 +217,19 @@ function openEdit(ticket){
   form.elements.description.value=ticket.description||'';
   form.elements.requested_qty.value=ticket.requested_qty||'';
   form.elements.requested_qty.disabled=!ticket.fg_code;
+  form.elements.started_at.value=toBangkokInput(ticket.started_at);
+  form.elements.ended_at.value=toBangkokInput(ticket.ended_at);
+  form.elements.started_at.disabled=ticket.status==='queued'||ticket.status==='cancelled'&&!ticket.started_at;
+  form.elements.ended_at.disabled=['queued','active','paused'].includes(ticket.status);
+  form.elements.started_at.required=['active','paused','done','partial'].includes(ticket.status);
+  form.elements.ended_at.required=['done','partial','cancelled'].includes(ticket.status);
+  $('#edit-time-hint').textContent=ticket.status==='queued'?'งานรอดำเนินการยังไม่มีเวลา กดเริ่มงานก่อนจึงจะแก้เวลาเริ่มได้':ticket.status==='active'||ticket.status==='paused'?'แก้เวลาเริ่มได้ เวลาสิ้นสุดจะบันทึกเมื่อปิดงาน':ticket.status==='cancelled'?'งานที่ยกเลิกแก้เวลาสิ้นสุดได้ และแก้เวลาเริ่มได้เฉพาะใบที่เคยเริ่มงาน':'แก้เวลาเริ่มและสิ้นสุดได้ โดยเวลาสิ้นสุดต้องไม่ก่อนเวลาเริ่ม';
   $('#ticket-edit-dialog').showModal();
 }
 function historyChanges(event){
   const before=event.before_state||{},after=event.after_state||{};
-  const fields=[['ticket_no','เลขที่ใบเบิก'],['job_type_id','Job'],['assignee_id','พนักงาน'],['description','หมายเหตุ'],['requested_qty','จำนวน FG']];
-  const display=(key,value)=>key==='job_type_id'?jobFor(value):key==='assignee_id'?nameFor(value):key==='requested_qty'?qtyText(value):String(value||'—');
+  const fields=[['ticket_no','เลขที่ใบเบิก'],['job_type_id','Job'],['assignee_id','พนักงาน'],['description','หมายเหตุ'],['requested_qty','จำนวน FG'],['started_at','เวลาเริ่ม'],['ended_at','เวลาสิ้นสุด']];
+  const display=(key,value)=>key==='job_type_id'?jobFor(value):key==='assignee_id'?nameFor(value):key==='requested_qty'?qtyText(value):['started_at','ended_at'].includes(key)?fmtAudit(value):String(value||'—');
   return fields.filter(([key])=>before[key]!==after[key]).map(([key,label])=>`<li><strong>${label}</strong> ${esc(display(key,before[key]))} → ${esc(display(key,after[key]))}</li>`).join('');
 }
 async function openHistory(ticket){
@@ -257,9 +267,13 @@ $('#ticket-edit-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!supervisor()||!editingTicketId)return;
   const f=new FormData(e.target),ticket=state.tickets.find(t=>t.id===editingTicketId);if(!ticket)return;
   const qty=ticket.fg_code?Number(e.target.elements.requested_qty.value):null,reason=String(f.get('reason')||'').trim();
-  if(!reason||ticket.fg_code&&(!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000)){notice('กรุณาระบุเหตุผลและจำนวน FG ที่ถูกต้อง',true);return;}
-  const args={p_ticket_id:editingTicketId,p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_requested_qty:qty,p_reason:reason};
-  if(await mutate('edit_ticket_as_supervisor',args,'แก้ไขใบเบิกและบันทึกประวัติแล้ว')){$('#ticket-edit-dialog').close();editingTicketId=null;}
+  if(!reason||ticket.fg_code&&(!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000)){$('#ticket-edit-message').textContent='กรุณาระบุเหตุผลและจำนวน FG ที่ถูกต้อง';return;}
+  const startValue=e.target.elements.started_at.value,endValue=e.target.elements.ended_at.value;
+  const startedAt=fromBangkokInput(startValue,ticket.started_at),endedAt=fromBangkokInput(endValue,ticket.ended_at);
+  const timeError=(startValue&&!startedAt||endValue&&!endedAt)?'รูปแบบเวลาไม่ถูกต้อง':timeEditError(ticket.status,startedAt,endedAt,Date.now(),ticket.started_at);
+  if(timeError){$('#ticket-edit-message').textContent=timeError;return;}
+  const args={p_ticket_id:editingTicketId,p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_requested_qty:qty,p_started_at:startedAt,p_ended_at:endedAt,p_reason:reason};
+  if(await mutate('edit_ticket_with_times_as_supervisor',args,'แก้ไขใบเบิกและบันทึกประวัติแล้ว','#ticket-edit-message')){$('#ticket-edit-dialog').close();editingTicketId=null;}
 });
 function clearRole(){state.role='';state.username='';state.code='';state.verified=false;['workRole','workUsername','workCode'].forEach(key=>sessionStorage.removeItem(key));}
 $('#edit-btn').addEventListener('click',()=>{if(editing()){clearRole();updateMode();notice('ออกจากโหมดทำงานแล้ว');}else $('#code-dialog').showModal();});
