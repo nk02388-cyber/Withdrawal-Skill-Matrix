@@ -1,0 +1,24 @@
+name: Sync PK WMS BOM
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 1 * * *'
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download PK WMS source
+        run: curl --fail --location --retry 3 'https://raw.githubusercontent.com/nk02388-cyber/PK-WMS/main/index.html' -o pk-wms-source.html
+      - name: Extract formulas without stock data
+        run: node scripts/sync-pk-bom.cjs pk-wms-source.html
+      - name: Commit updated formulas
+        run: |
+          if git diff --quiet -- pk-bom.json; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pk-bom.json
+          git commit -m 'Sync BOM formulas from PK WMS'
+          git push
