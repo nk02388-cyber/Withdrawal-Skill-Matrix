@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="logo.css">
   <link rel="stylesheet" href="bom.css">
+  <link rel="stylesheet" href="report.css">
 </head>
 <body>
   <div class="app-shell">
@@ -36,11 +37,13 @@
         <div class="section-heading"><div><div class="eyebrow">ACTIVE QUEUE</div><h3>งานที่กำลังทำ</h3></div></div>
         <div id="active-list" class="ticket-list"></div>
       </section>
-      <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>งานเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button" hidden>+ สร้างใบเบิก</button></div><div class="toolbar"><label>สถานะ <select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="done">เสร็จแล้ว</option></select></label><span id="ticket-count" class="hint"></span></div><div id="ticket-list" class="ticket-list"></div></section>
+      <section id="tickets-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">WITHDRAWAL LOG</div><h2>งานเบิกของ</h2></div><button id="new-ticket-btn" class="primary admin-only" type="button" hidden>+ สร้างใบเบิก</button></div><div class="ticket-filters" aria-label="ค้นหาและกรองใบเบิก"><label>เลขที่ใบเบิก<input id="ticket-search" type="search" placeholder="ค้นหาเลขที่ใบเบิก" autocomplete="off"></label><label>พนักงาน<select id="ticket-person-filter"><option value="">ทุกคน</option></select></label><label>Job<select id="ticket-job-filter"><option value="">ทุก Job</option></select></label><label>วันที่สร้างจาก<input id="ticket-date-from" type="date"></label><label>ถึงวันที่<input id="ticket-date-to" type="date"></label><label>สถานะ<select id="ticket-filter"><option value="all">ทั้งหมด</option><option value="queued">รอดำเนินการ</option><option value="active">กำลังทำ</option><option value="done">เสร็จแล้ว</option></select></label></div><div class="ticket-filter-actions"><span id="ticket-count" class="hint" role="status"></span><div><button id="clear-ticket-filters" class="text-btn" type="button">ล้างตัวกรอง</button><button id="print-report-btn" class="primary" type="button">พิมพ์รายงาน / PDF</button></div></div><div id="ticket-list" class="ticket-list"></div></section>
       <section id="people-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">TEAM DIRECTORY</div><h2>พนักงาน</h2></div></div><form id="staff-form" class="inline-form admin-only" hidden><label>ชื่อพนักงาน<input name="name" required maxlength="100" placeholder="ชื่อที่แสดงในใบเบิก"></label><button class="primary" type="submit">เพิ่มพนักงาน</button></form><div id="people-list" class="people-list"></div></section>
       <section id="settings-view" class="view" hidden><div class="section-heading"><div><div class="eyebrow">CAPABILITY SETUP</div><h2>ประเภทงานและระดับทักษะ</h2></div></div><form id="job-form" class="inline-form"><label>ชื่อ Job / ประเภทงาน<input name="name" required maxlength="80" placeholder="เช่น เบิกวัตถุดิบ"></label><button class="primary" type="submit">เพิ่มประเภทงาน</button></form><div id="job-list" class="job-list"></div><div class="section-heading secondary-heading"><div><div class="eyebrow">MANUAL ASSESSMENT</div><h3>กำหนดระดับทักษะ</h3></div></div><div id="skill-editor"></div></section>
     </main>
   </div>
+
+  <section id="print-report" class="print-report" aria-hidden="true"></section>
 
   <dialog id="code-dialog"><form id="code-form" class="dialog-content"><div class="dialog-head"><div class="eyebrow">EDIT ACCESS</div><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>รหัสร่วมสำหรับแก้ข้อมูล</h2><p class="hint">ดู Dashboard ได้ทันที รหัสนี้ใช้เฉพาะการเพิ่มและแก้ข้อมูล</p><label>รหัสร่วม<input name="code" type="password" required autocomplete="off"></label><p id="code-message" class="form-message" role="status"></p><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">เปิดโหมดแก้ไข</button></div></form></dialog>
 
