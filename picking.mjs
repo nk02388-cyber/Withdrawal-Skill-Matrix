@@ -30,3 +30,10 @@ export function pickVarianceText(required,actual,unit,format=String){
  const delta=Math.round((Number(actual)-Number(required))*10000)/10000;
  return delta===0?'ครบตามใบเบิก':(delta<0?'ขาด ':'เกิน ')+format(Math.abs(delta))+' '+unit;
 }
+export function convertPickMode(required,value,previous,next){
+ if(value==='')return '';
+ const actual=actualFromInput(required,value,previous);
+ if(!Number.isFinite(actual)||actual<0)return '';
+ const converted=Math.round((next==='short'?Number(required)-actual:next==='over'?actual-Number(required):actual)*10000)/10000;
+ return converted<0?'':String(converted);
+}

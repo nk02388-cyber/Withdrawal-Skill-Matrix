@@ -45,3 +45,13 @@
 :root[data-theme="light"] .bom-table tr.pick-over td:first-child{box-shadow:inset 4px 0 #2467ad}
 :root[data-theme="light"] .bom-table .pick-variance-badge.pick-short{background:#ffe0e6;color:#941d35;border-color:#e9a0af}
 :root[data-theme="light"] .bom-table .pick-variance-badge.pick-over{background:#dcecff;color:#174f89;border-color:#91b9e5}
+/* Readable quantities and controls, with stable alignment. */
+.ticket{align-items:flex-start}
+.ticket-right{padding-top:2px}
+.bom-table td:nth-child(3){min-width:185px}
+.bom-table .pick-variance-badge{white-space:nowrap;font-variant-numeric:tabular-nums}
+.ticket-variance .bom-table{min-width:560px}
+.pick-line [data-pick-short]{font-size:14px;line-height:1.7;background:var(--surface-raised);border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:var(--ink);font-weight:600}
+.pick-line [data-pick-reason]:required{border-left:3px solid var(--amber)}
+.dialog-content .form-message:empty{display:none}
+@media(max-width:560px){.ticket-right{width:100%;border-top:1px solid var(--line);padding-top:12px}.ticket-actions{display:flex;flex-wrap:wrap;gap:6px}.ticket-actions button{min-height:40px}.bom-table td:nth-child(3){min-width:175px}}
