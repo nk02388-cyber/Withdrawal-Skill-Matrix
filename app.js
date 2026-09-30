@@ -14,7 +14,7 @@ const fmt = formatBangkokDateTime;
 const fmtReport = formatBangkokDateTime;
 const fmtAudit = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 sessionStorage.removeItem('editCode');
-const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],skills:[],bom:null,selectedFormulaCode:'',stock:null,stockLines:[],view:'dashboard'};
+const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],deletedTickets:[],skills:[],bom:null,selectedFormulaCode:'',stock:null,stockLines:[],view:'dashboard'};
 const editing = () => state.verified && !!state.code;
 const supervisor = () => editing() && state.role==='supervisor';
 const operator = () => editing() && state.role==='operator';
@@ -34,8 +34,8 @@ const jobFor = id => state.jobs.find(j=>j.id===id)?.name||'ไม่พบปร
 const qtyText = value => new Intl.NumberFormat('th-TH',{maximumFractionDigits:4}).format(Number(value));
 const calcQty = (rate, qty) => Math.round((Number(rate)*qty+Number.EPSILON)*10000)/10000;
 const statusLabels={queued:'รอดำเนินการ',active:'กำลังทำ',paused:'พักงาน',done:'เสร็จแล้ว',partial:'เบิกไม่ครบ',cancelled:'ยกเลิก'};
-const eventLabels={created:'สร้างใบเบิก',imported:'ข้อมูลก่อนเปิดประวัติ',started:'เริ่มงาน',paused:'พักงาน',resumed:'ทำงานต่อ',completed:'จบงาน',partial:'เบิกไม่ครบ',cancelled:'ยกเลิก',edited:'แก้ไขใบเบิก'};
-const eventConfig={pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
+const eventLabels={created:'สร้างใบเบิก',imported:'ข้อมูลก่อนเปิดประวัติ',started:'เริ่มงาน',paused:'พักงาน',resumed:'ทำงานต่อ',completed:'จบงาน',partial:'เบิกไม่ครบ',cancelled:'ยกเลิก',edited:'แก้ไขใบเบิก',deleted:'ลบใบเบิก',restored:'กู้คืนใบเบิก'};
+const eventConfig={delete:{title:'ลบใบเบิก',rpc:'set_ticket_deleted_as_supervisor',required:true,success:'ลบใบเบิกแล้ว'},restore:{title:'กู้คืนใบเบิก',rpc:'set_ticket_deleted_as_supervisor',required:true,success:'กู้คืนใบเบิกแล้ว'},pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
 let pendingEvent=null,editingTicketId=null;
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===state.selectedFormulaCode);
 function materialTable(lines){return '<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส / วัสดุ</th><th>ต้องเบิก</th><th>เบิกจริง / ขาด</th></tr></thead><tbody>'+lines.map(l=>{
@@ -136,6 +136,9 @@ function updateMode(){
   $('#user-label').textContent=supervisor()?`หัวหน้า · ${state.username}`:operator()?`ผู้ปฏิบัติงาน · ${state.username}`:'โหมดดูข้อมูล';
   $('#edit-btn').textContent=editing()?'ออกจากโหมด':'เข้าสู่โหมดทำงาน';
   if(!supervisor()&&['people','settings'].includes(state.view))showView('dashboard');
+  const trash=$('#ticket-filter option[value=deleted]');if(trash)trash.remove();
+  if(supervisor())$('#ticket-filter').insertAdjacentHTML('beforeend','<option value="deleted">ถังขยะ (หัวหน้า)</option>');
+  else {state.deletedTickets=[];if($('#ticket-filter').value==='deleted')$('#ticket-filter').value='all';}
   render();
 }
 function showView(view){state.view=view;if(view!=='tickets')document.body.classList.remove('print-tickets');document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==`${view}-view`);document.querySelectorAll('#nav button').forEach(el=>{const active=el.dataset.view===view;el.classList.toggle('active',active);if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});$('#page-title').textContent={dashboard:'ภาพรวม',tickets:'ใบเบิกของ',people:'พนักงาน',settings:'ประเภทงานและทักษะ'}[view];window.scrollTo({top:0,behavior:'instant'});}
@@ -145,6 +148,8 @@ async function load(silent=false){
   const {data,error}=await state.db.rpc('get_dashboard_state');
   if(error){syncLabel('ซิงก์ไม่สำเร็จ');if(!silent)notice(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`,true);return;}
   state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];
+  state.deletedTickets=[];
+  if(supervisor()){const trash=await state.db.rpc('get_deleted_tickets_as_supervisor',{p_username:state.username,p_code:state.code});if(trash.error){if(!silent)notice('โหลดถังขยะไม่สำเร็จ',true);}else if(supervisor())state.deletedTickets=trash.data||[];}
   syncLabel(`อัปเดต ${formatBangkokClock(Date.now())} น. (เวลาไทย)`,true);
   render();
 }
@@ -190,20 +195,21 @@ function ticketHtml(t){
   const status=statusLabels[t.status]||t.status;
   const button=(action,label,primary=false)=>`<button type="button" class="${primary?'primary':'text-btn'}" data-action="${action}" data-id="${esc(t.id)}">${label}</button>`;
   let actions='';
-  if(operator()){
+  if(!t.deleted_at&&operator()){
     if(['active','paused'].includes(t.status)&&t.materials?.length)actions+=button('picks','ยืนยันเบิกจริง');
     if(t.status==='queued')actions+=button('start','เริ่มงาน',true);
     if(t.status==='active')actions+=button('pause','พักงาน')+button('partial','เบิกไม่ครบ')+button('finish','จบงาน',true);
     if(t.status==='paused')actions+=button('resume','ทำงานต่อ',true)+button('partial','เบิกไม่ครบ');
   }
-  if(supervisor()){
-    actions+=button('edit','แก้ไข');
+  if(supervisor()&&t.deleted_at){actions+=button('restore','กู้คืน');}
+  if(supervisor()&&!t.deleted_at){
+    actions+=button('edit','แก้ไข')+button('delete','ลบ');
     if(['queued','active','paused'].includes(t.status))actions+=button('cancel','ยกเลิก');
   }
   actions+=button('history','ประวัติ');
   let duration='';if(t.started_at&&t.ended_at){const mins=Math.max(0,Math.round((new Date(t.ended_at)-new Date(t.started_at))/60000));duration=` · ${Math.floor(mins/60)} ชม. ${mins%60} นาที`;}
   const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials"><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
-  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
+  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value};}
 function renderTicketFilterOptions(){
@@ -213,12 +219,12 @@ function renderTicketFilterOptions(){
     select.value=previous;
   }
 }
-function selectedTickets(){return filterTickets(state.tickets,ticketFilters());}
+function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:state.tickets,{...ticketFilters(),status:$('#ticket-filter').value==='deleted'?'':ticketFilters().status});}
 function renderTickets(){
   renderTicketFilterOptions();
   const filters=ticketFilters(),invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
   const list=selectedTickets();
-  $('#ticket-count').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`${list.length} จาก ${state.tickets.length} รายการ`;
+  $('#ticket-count').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`${list.length} จาก ${filters.status==='deleted'?state.deletedTickets.length:state.tickets.length} รายการ`;
   $('#print-report-btn').disabled=!!invalid;
   $('#ticket-list').innerHTML=invalid?empty('กรุณาแก้ไขช่วงวันที่'):list.length?list.map(ticketHtml).join(''):empty('ไม่พบใบเบิกตามตัวกรอง');
 }
@@ -249,7 +255,7 @@ function openEvent(kind,ticket){
   pendingEvent={kind,id:ticket.id};const config=eventConfig[kind],form=$('#event-form');
   form.reset();form.elements.reason.required=config.required;
   $('#event-title').textContent=config.title;$('#event-ticket').textContent=`ใบเบิก ${ticket.ticket_no}`;
-  $('#event-hint').textContent=kind==='partial'?'ใบเบิกจะปิดเป็นเบิกไม่ครบและบันทึกเวลาสิ้นสุด':kind==='cancel'?'ใบเบิกจะถูกปิดและไม่สามารถเริ่มงานต่อได้':kind==='pause'?'เวลาที่เริ่มงานไว้จะคงเดิม และสามารถกลับมาทำงานต่อได้':'เหตุผลเพิ่มเติม (ถ้ามี)';
+  $('#event-hint').textContent=kind==='delete'?'ใบเบิกจะย้ายไปถังขยะและไม่นับใน Dashboard หัวหน้าสามารถกู้คืนได้ โดยเลขใบเบิกเดิมยังถูกเก็บไว้':kind==='restore'?'ใบเบิกจะกลับเข้ารายการและ Dashboard ในสถานะเดิม':kind==='partial'?'ใบเบิกจะปิดเป็นเบิกไม่ครบและบันทึกเวลาสิ้นสุด':kind==='cancel'?'ใบเบิกจะถูกปิดและไม่สามารถเริ่มงานต่อได้':kind==='pause'?'เวลาที่เริ่มงานไว้จะคงเดิม และสามารถกลับมาทำงานต่อได้':'เหตุผลเพิ่มเติม (ถ้ามี)';
   $('#event-dialog').showModal();
 }
 function openEdit(ticket){
@@ -290,12 +296,12 @@ document.addEventListener('click',async e=>{
   const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
   if(e.target.closest('[data-dashboard-tickets]')){$('#ticket-date-from').value=$('#dashboard-from').value;$('#ticket-date-to').value=$('#dashboard-to').value;$('#ticket-job-filter').value=$('#dashboard-job').value;$('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-filter').value='all';renderTickets();showView('tickets');return;}
   const action=e.target.closest('button[data-action]');if(action){
-    const kind=action.dataset.action,ticket=state.tickets.find(t=>t.id===action.dataset.id);
+    const kind=action.dataset.action,ticket=[...state.tickets,...state.deletedTickets].find(t=>t.id===action.dataset.id);
     if(!ticket)return;
     if(operator()&&['picks','finish','partial'].includes(kind)&&ticket.materials?.length){openPicks(ticket,kind==='finish'?'done':kind==='partial'?'partial':null);return;}
     if(kind==='history'){await openHistory(ticket);return;}
     if(kind==='edit'&&supervisor()){openEdit(ticket);return;}
-    if(kind in eventConfig){if((kind==='cancel'&&supervisor())||(kind!=='cancel'&&operator()))openEvent(kind,ticket);return;}
+    if(kind in eventConfig){if((['cancel','delete','restore'].includes(kind)&&supervisor())||(!['cancel','delete','restore'].includes(kind)&&operator()))openEvent(kind,ticket);return;}
     if(['start','finish'].includes(kind)&&operator()){
       action.disabled=true;
       await mutate(kind==='start'?'start_ticket_as_operator':'finish_ticket_as_operator',{p_ticket_id:ticket.id},kind==='start'?'เริ่มงานแล้ว':'จบงานแล้ว');
@@ -309,7 +315,7 @@ $('#event-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!pendingEvent)return;
   const {kind,id}=pendingEvent,config=eventConfig[kind],reason=String(new FormData(e.target).get('reason')||'').trim();
   if(config.required&&!reason){notice('กรุณาระบุเหตุผล',true);return;}
-  if(await mutate(config.rpc,{p_ticket_id:id,p_reason:reason},config.success)){$('#event-dialog').close();pendingEvent=null;}
+  if(await mutate(config.rpc,{p_ticket_id:id,p_reason:reason,...(['delete','restore'].includes(kind)?{p_deleted:kind==='delete'}:{})},config.success)){$('#event-dialog').close();pendingEvent=null;}
 });
 $('#ticket-edit-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!supervisor()||!editingTicketId)return;
@@ -342,7 +348,7 @@ themeButton.addEventListener('click',()=>{
 });
 window.addEventListener('storage',e=>{if(e.key==='bcl-display-theme'){document.documentElement.dataset.theme=e.newValue==='light'?'light':'dark';syncThemeButton();}});
 syncThemeButton();
-$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
+$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();await load(true);notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
 $('#refresh-btn').addEventListener('click',()=>load());
 ['#ticket-search','#ticket-date-from','#ticket-date-to'].forEach(selector=>$(selector).addEventListener('input',renderTickets));
 ['#ticket-person-filter','#ticket-job-filter','#ticket-filter'].forEach(selector=>$(selector).addEventListener('change',renderTickets));
