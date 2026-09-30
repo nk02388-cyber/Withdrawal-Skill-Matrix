@@ -23,3 +23,5 @@
 .brand-caption .warehouse-name{font-size:10px;font-weight:600;letter-spacing:.055em}
 @media(max-width:850px){.rail .brand{gap:12px}.rail .brand-art{width:48px;height:48px}.brand-caption small{margin-top:5px}.brand-caption small span{display:inline}.brand-caption .warehouse-name{margin-left:6px}.company-legal{display:inline;margin-left:7px;font-size:10px;letter-spacing:.035em}}
 @media(max-width:360px){.company-name{font-size:14px}.company-legal{font-size:9px}}
+
+@media(min-width:851px){.rail .brand + .nav{margin-top:32px}}
