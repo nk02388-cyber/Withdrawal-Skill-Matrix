@@ -1,3 +1,4 @@
+import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary } from './picking.mjs';
 import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
@@ -27,7 +28,7 @@ const portraitFiles = {
 };
 const featuredOrder = ['bee9c21d-d1a0-4f7a-8d75-c0cde7aa76e1','c0da4eaa-ac39-459d-b324-44d6e0e44931','5da3ec7d-24cb-4639-8d8b-cac3a550753a'];
 function personPortrait(person, className='person-avatar'){
-  const file=portraitFiles[person.id];
+  const file=person.photo_data||portraitFiles[person.id];
   return file?`<img class="${className}" src="${file}" alt="ภาพ ${esc(person.display_name)}" loading="lazy" width="72" height="72">`:`<span class="${className} avatar-fallback" aria-hidden="true">${esc(person.display_name?.slice(0,1)||'?')}</span>`;
 }
 const jobFor = id => state.jobs.find(j=>j.id===id)?.name||'ไม่พบประเภทงาน';
@@ -248,7 +249,7 @@ function populateReport(list,filters){
   $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${list.length}</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>Job</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th></tr></thead>${rows||'<tbody><tr><td colspan="9">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก</p>`;
 }
 function printReport(){const list=selectedTickets();populateReport(list,ticketFilters());document.body.classList.add('print-tickets');window.print();}
-function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
+function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><label class="staff-photo-button">เปลี่ยนรูป<input type="file" accept="image/jpeg,image/png,image/webp" data-staff-photo="${esc(p.id)}" aria-label="เปลี่ยนรูป ${esc(p.display_name)}"></label><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
 function renderSettings(){const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);$('#job-list').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="job-row"><strong>${esc(j.name)}</strong><label class="hint"><input type="checkbox" data-job-active="${esc(j.id)}" ${j.active?'checked':''}> เปิดใช้งาน</label></div>`).join(''):empty('ยังไม่มีประเภทงาน');$('#skill-editor').innerHTML=!people.length||!jobs.length?empty('เพิ่มพนักงานและประเภทงานก่อนกำหนดทักษะ'):`<div class="matrix-wrap"><table class="skill-edit-table"><thead><tr><th>พนักงาน</th><th>Job</th><th>ระดับทักษะ</th></tr></thead><tbody>${people.flatMap(p=>jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<tr><td>${esc(p.display_name)}</td><td>${esc(j.name)}</td><td><select data-skill="${esc(p.id)}" data-job="${esc(j.id)}">${['ยังไม่ประเมิน','1 · เริ่มต้น','2 · ทำได้','3 · ชำนาญ','4 · สอนงานได้'].map((label,i)=>`<option value="${i}" ${i===level?'selected':''}>${label}</option>`).join('')}</select></td></tr>`})).join('')}</tbody></table></div>`;}
 async function mutate(fn,args,success,errorTarget){const {error}=await state.db.rpc(fn,{p_username:state.username,p_code:state.code,...args});if(error){const message=`บันทึกไม่สำเร็จ: ${error.message}`;if(errorTarget)$(errorTarget).textContent=message;else notice(message,true);return false;}if(errorTarget)$(errorTarget).textContent='';notice(success);await load(true);return true;}
 function openEvent(kind,ticket){
@@ -424,7 +425,21 @@ $('#ticket-form').addEventListener('submit',async e=>{
   }
   e.target.reset();state.stockLines=[];$('#ticket-dialog').close();notice('บันทึกใบเบิกแล้ว');await load(true);
 });
-$('#staff-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_staff_as_supervisor',{p_name:name},'เพิ่มพนักงานแล้ว'))e.target.reset();});
+$('#staff-photo').addEventListener('change',async e=>{
+ $('#staff-photo-message').textContent='';$('#staff-photo-preview').hidden=true;
+ try{const photo=await prepareStaffPhoto(e.target.files[0]);if(photo){$('#staff-photo-preview').src=photo;$('#staff-photo-preview').hidden=false;}}catch(error){e.target.value='';$('#staff-photo-message').textContent=error.message;}
+});
+$('#staff-form').addEventListener('submit',async e=>{
+ e.preventDefault();if(!supervisor())return;const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;$('#staff-photo-message').textContent='';
+ try{const name=String(new FormData(form).get('name')).trim(),photo=await prepareStaffPhoto($('#staff-photo').files[0]);
+ if(name&&await mutate('add_staff_with_photo_as_supervisor',{p_name:name,p_photo:photo},'เพิ่มพนักงานแล้ว','#staff-photo-message')){form.reset();$('#staff-photo-preview').hidden=true;}
+ }catch(error){$('#staff-photo-message').textContent=error.message;}finally{button.disabled=false;}
+});
+document.addEventListener('change',async e=>{
+ if(!e.target.matches('[data-staff-photo]')||!supervisor()||!e.target.files[0])return;
+ const input=e.target;input.disabled=true;
+ try{const photo=await prepareStaffPhoto(input.files[0]);await mutate('set_staff_photo_as_supervisor',{p_staff_id:input.dataset.staffPhoto,p_photo:photo},'เปลี่ยนรูปพนักงานแล้ว');}catch(error){notice(error.message,true);}finally{input.disabled=false;input.value='';}
+});
 $('#job-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_job_as_supervisor',{p_name:name},'เพิ่มประเภทงานแล้ว'))e.target.reset();});
 document.addEventListener('change',async e=>{let fn,args;if(e.target.matches('[data-active]')){fn='set_staff_active_as_supervisor';args={p_staff_id:e.target.dataset.active,p_active:e.target.checked};}else if(e.target.matches('[data-job-active]')){fn='set_job_active_as_supervisor';args={p_job_id:e.target.dataset.jobActive,p_active:e.target.checked};}else if(e.target.matches('[data-skill]')){fn='set_skill_rating_as_supervisor';args={p_staff_id:e.target.dataset.skill,p_job_id:e.target.dataset.job,p_level:Number(e.target.value)};}else return;await mutate(fn,args,'บันทึกแล้ว');});
 
