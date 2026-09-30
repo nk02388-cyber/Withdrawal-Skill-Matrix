@@ -39,6 +39,7 @@ const statusLabels={queued:'รอดำเนินการ',active:'กำล
 const eventLabels={created:'สร้างใบเบิก',imported:'ข้อมูลก่อนเปิดประวัติ',started:'เริ่มงาน',paused:'พักงาน',resumed:'ทำงานต่อ',completed:'จบงาน',partial:'เบิกไม่ครบ',cancelled:'ยกเลิก',edited:'แก้ไขใบเบิก',deleted:'ลบใบเบิก',restored:'กู้คืนใบเบิก'};
 const eventConfig={delete:{title:'ลบใบเบิก',rpc:'set_ticket_deleted_as_supervisor',required:true,success:'ลบใบเบิกแล้ว'},restore:{title:'กู้คืนใบเบิก',rpc:'set_ticket_deleted_as_supervisor',required:true,success:'กู้คืนใบเบิกแล้ว'},pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
 let pendingEvent=null,editingTicketId=null;
+const expandedTickets=new Set();
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===state.selectedFormulaCode);
 function materialTable(lines){return '<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส / วัสดุ</th><th>ต้องเบิก</th><th>เบิกจริง / ขาด–เกิน</th></tr></thead><tbody>'+lines.map(l=>{
   const confirmed=l.confirmed_at&&typeof l.actual_qty==='number';
@@ -213,7 +214,7 @@ function ticketHtml(t){
   const duration=workMinutes(t.started_at,t.ended_at)===null?'':` · ${workDurationText(t.started_at,t.ended_at)} (หักพักเที่ยง)`;
   const varianceLines=(t.materials||[]).filter(line=>line.confirmed_at&&typeof line.actual_qty==='number'&&Math.round((line.actual_qty-Number(line.required_qty))*10000)!==0);
   const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>รายการเบิกขาดหรือเกิน · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
-  const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials"><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
+  const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials" data-material-ticket="${esc(t.id)}"${expandedTickets.has(t.id)?' open':''}><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
   return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value};}
@@ -225,7 +226,14 @@ function renderTicketFilterOptions(){
   }
 }
 function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:state.tickets,{...ticketFilters(),status:$('#ticket-filter').value==='deleted'?'':ticketFilters().status});}
+function rememberOpenMaterials(){
+  $('#ticket-list').querySelectorAll('[data-material-ticket]').forEach(details=>{
+    if(details.open)expandedTickets.add(details.dataset.materialTicket);
+    else expandedTickets.delete(details.dataset.materialTicket);
+  });
+}
 function renderTickets(){
+  rememberOpenMaterials();
   renderTicketFilterOptions();
   const filters=ticketFilters(),invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
   const list=selectedTickets();
