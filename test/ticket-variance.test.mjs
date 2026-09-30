@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
+import {pickVarianceText} from '../picking.mjs';
+
+const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const table=source.slice(source.indexOf('function materialTable('),source.indexOf('function renderBomOptions('));
+const renderer=source.slice(source.indexOf('function ticketHtml('),source.indexOf('function ticketFilters('));
+const html=runInNewContext(table+renderer+';ticketHtml',{
+  esc:v=>String(v??'').replace(/</g,'&lt;'),qtyText:v=>String(v),pickVarianceText,
+  statusLabels:{done:'เสร็จแล้ว'},operator:()=>false,supervisor:()=>false,
+  workMinutes:()=>null,jobFor:()=> 'Job',nameFor:()=> 'พนักงาน',fmt:()=> '—',
+});
+const line=(pk_code,actual_qty,confirmed_at='now')=>({pk_code,pk_name:'วัสดุ',required_qty:10,actual_qty,confirmed_at,unit:'ชิ้น',short_reason:'<เหตุผล>'});
+test('confirmed short and over items are visible outside collapsed material details',()=>{
+  const result=html({status:'done',materials:[line('SHORT',0),line('OVER',12),line('FULL',10),line('UNKNOWN',0,null)]});
+  const visible=result.match(/<section class="ticket-variance"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(visible);
+  assert.match(visible,/2 รายการ/);
+  assert.match(visible,/SHORT/);assert.match(visible,/ขาด 10 ชิ้น/);
+  assert.match(visible,/OVER/);assert.match(visible,/เกิน 2 ชิ้น/);
+  assert.match(visible,/&lt;เหตุผล>/);
+  assert.doesNotMatch(visible,/FULL|UNKNOWN|<details/);
+});
+test('fully picked and unconfirmed tickets show no variance section',()=>{
+  for(const materials of [undefined,[],[line('FULL',10)],[line('UNKNOWN',0,null)]]){
+    assert.doesNotMatch(html({status:'done',materials}),/ticket-variance/);
+  }
+});
