@@ -143,7 +143,7 @@ function updateMode(){
   else {state.deletedTickets=[];if($('#ticket-filter').value==='deleted')$('#ticket-filter').value='all';}
   render();
 }
-function showView(view){state.view=view;if(view!=='tickets')document.body.classList.remove('print-tickets');document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==`${view}-view`);document.querySelectorAll('#nav button').forEach(el=>{const active=el.dataset.view===view;el.classList.toggle('active',active);if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});$('#page-title').textContent={dashboard:'ภาพรวม',tickets:'ใบเบิกของ',people:'พนักงาน',settings:'ประเภทงานและทักษะ'}[view];window.scrollTo({top:0,behavior:'instant'});}
+function showView(view){state.view=view;if(view!=='tickets')document.body.classList.remove('print-tickets');document.querySelectorAll('.view').forEach(el=>el.hidden=el.id!==`${view}-view`);document.querySelectorAll('#nav button').forEach(el=>{const active=el.dataset.view===view;el.classList.toggle('active',active);if(active)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current');});window.scrollTo({top:0,behavior:'instant'});}
 async function load(silent=false){
   if(!state.db)return;
   syncLabel('กำลังซิงก์…');
