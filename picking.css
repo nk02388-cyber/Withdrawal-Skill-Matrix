@@ -1,0 +1,15 @@
+.dashboard-filters{display:flex;align-items:end;flex-wrap:wrap;gap:12px;margin-bottom:20px;padding:16px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.dashboard-filters label{display:grid;gap:6px;font-size:12px;flex:1;min-width:150px;color:var(--muted)}
+.dashboard-filters input,.dashboard-filters select{width:100%;min-height:42px;min-width:0}
+#dashboard-scope{flex-basis:100%;margin:0;line-height:1.7}
+#pick-dialog{width:min(100% - 24px,760px)}
+.pick-line{border:1px solid var(--line);border-radius:10px;padding:16px;margin:0 0 16px;min-width:0;background:var(--surface)}
+.pick-line legend{font-weight:700;color:var(--amber)}
+.pick-line p{margin:6px 0 12px;overflow-wrap:anywhere}
+.pick-line input{max-width:240px}.pick-line textarea{min-height:65px}
+.pick-summary{font-size:12px;color:var(--muted);line-height:1.8;margin:12px 0}
+#pick-message,.dashboard-filters .error{color:var(--red)}
+#pick-form .dialog-actions{position:sticky;bottom:0;background:var(--surface);padding:12px 0;margin:0}
+@media(max-width:560px){.dashboard-filters label{flex-basis:calc(50% - 12px);min-width:0}.dashboard-filters{padding:12px}.dashboard-filters input{font-size:12px;padding:8px}}
+
+.brand-caption{min-width:0}.company-name{display:block;font-size:16px;line-height:1.35;letter-spacing:0;overflow-wrap:normal}.brand-caption small{font-size:11px}@media(max-width:850px){.company-name{font-size:16px}}

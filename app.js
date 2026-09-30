@@ -1,3 +1,5 @@
+import { pickError, confirmedPickSummary } from './picking.mjs';
+import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
 import { filterTickets } from './ticket-report.mjs';
@@ -36,7 +38,10 @@ const eventLabels={created:'สร้างใบเบิก',imported:'ข้�
 const eventConfig={pause:{title:'พักงาน',rpc:'pause_ticket_as_operator',required:true,success:'พักงานแล้ว'},resume:{title:'กลับมาทำงานต่อ',rpc:'resume_ticket_as_operator',required:false,success:'กลับมาทำงานแล้ว'},partial:{title:'ปิดงานเป็นเบิกไม่ครบ',rpc:'mark_ticket_partial_as_operator',required:true,success:'ปิดงานเป็นเบิกไม่ครบแล้ว'},cancel:{title:'ยกเลิกใบเบิก',rpc:'cancel_ticket_as_supervisor',required:true,success:'ยกเลิกใบเบิกแล้ว'}};
 let pendingEvent=null,editingTicketId=null;
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===state.selectedFormulaCode);
-function materialTable(lines){return `<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>ที่มา</th><th>จำนวนเบิก</th></tr></thead><tbody>${lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${l.source==='stock'?`นอก BOM · Stock ${esc(l.stock_report_date||'')}`:`BOM · ${qtyText(l.qty_per_unit)} ${esc(l.unit)} / FG`}</td><td><strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></td></tr>`).join('')}</tbody></table></div>`;}
+function materialTable(lines){return '<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส / วัสดุ</th><th>ต้องเบิก</th><th>เบิกจริง / ขาด</th></tr></thead><tbody>'+lines.map(l=>{
+  const confirmed=l.confirmed_at&&typeof l.actual_qty==='number';
+  return `<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small><small>${l.source==='stock'?'นอก BOM':'BOM'}</small></td><td>${qtyText(l.required_qty)} ${esc(l.unit)}</td><td>${confirmed?`<strong>จริง ${qtyText(l.actual_qty)} ${esc(l.unit)}</strong><small>ขาด ${qtyText(Math.max(0,l.required_qty-l.actual_qty))} ${esc(l.unit)}</small>${l.short_reason?'<small>เหตุผล: '+esc(l.short_reason)+'</small>':''}`:'ยังไม่ยืนยัน'}</td></tr>`;
+}).join('')+'</tbody></table></div>';}
 function renderBomOptions(){
   if(!state.bom){$('#bom-results').innerHTML='';$('#bom-source').textContent='โหลด BOM ไม่สำเร็จ';renderBomPreview();return;}
   const term=$('#bom-search').value.trim();
@@ -110,7 +115,7 @@ async function loadBom(){
   }catch(error){notice(`โหลด BOM จาก PK WMS ไม่สำเร็จ: ${error.message}`,true);return false;}
 }
 
-function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hidden=!msg;el.style.background=error?'#ffece8':'#e2f6f1';el.style.color=error?'#a74436':'#12685b';}
+function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hidden=!msg;el.classList.toggle('error',error);}
 function showTicketNumberConflict(){
   const input=$('#ticket-form [name="ticket_no"]'),number=input.value.trim();
   const suggestion=suggestTicketNumber(state.tickets,number);
@@ -154,19 +159,28 @@ function renderExperienceMatrix(people,jobs,tickets){
   }).join('')}</tr>`).join('')}</tbody></table>`;
 }
 function renderDashboard(){
-  const t=state.tickets;
+  const jobSelect=$('#dashboard-job'),jobId=jobSelect.value;
+  jobSelect.innerHTML='<option value="">ทุก Job</option>'+state.jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');jobSelect.value=jobId;
+  const preset=$('#dashboard-period').value;
+  if(preset!=='custom'){const range=presetDates(preset);$('#dashboard-from').value=range.dateFrom;$('#dashboard-to').value=range.dateTo;}
+  const filters={dateFrom:$('#dashboard-from').value,dateTo:$('#dashboard-to').value,jobId:jobSelect.value};
+  const invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
+  const t=filterTickets(state.tickets,filters);
+  $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${t.length} ใบ · วันที่สร้างใบเบิก (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุก Job'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
+  $('#dashboard-scope').classList.toggle('error',!!invalid);
   $('#dashboard-total').textContent=qtyText(t.length);
   $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<div class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(t.filter(x=>x.status===status).length)}</div></div>`).join('');
   const people=state.people.filter(p=>p.active).sort((a,b)=>{
     const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
-  }),jobs=state.jobs.filter(j=>j.active);
+  }),jobs=state.jobs.filter(j=>(j.active||j.id===jobId)&&(!jobId||j.id===jobId));
   $('#performance-list').innerHTML=people.length?people.map(p=>{
     const perf=personPerformance(p.id,t);
     const materialLines=t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done').reduce((sum,ticket)=>sum+(Array.isArray(ticket.materials)?ticket.materials.length:0),0);
     const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
     const closed=perf.done+perf.partial;
-    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(perf.total)} ใบเบิก</span></div></div><div class="workload-summary"><div><strong>${qtyText(perf.done)}</strong><span>ใบที่จบ</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>เบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} ใบ)` : ''}</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
+    const picks=confirmedPickSummary(t.filter(ticket=>ticket.assignee_id===p.id));
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(perf.total)} ใบเบิก</span></div></div><div class="workload-summary"><div><strong>${qtyText(perf.done)}</strong><span>ใบที่จบ</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="pick-summary">ยืนยันแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>เบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} ใบ)` : ''}</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
   $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);
   const active=t.filter(x=>['active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
@@ -177,6 +191,7 @@ function ticketHtml(t){
   const button=(action,label,primary=false)=>`<button type="button" class="${primary?'primary':'text-btn'}" data-action="${action}" data-id="${esc(t.id)}">${label}</button>`;
   let actions='';
   if(operator()){
+    if(['active','paused'].includes(t.status)&&t.materials?.length)actions+=button('picks','ยืนยันเบิกจริง');
     if(t.status==='queued')actions+=button('start','เริ่มงาน',true);
     if(t.status==='active')actions+=button('pause','พักงาน')+button('partial','เบิกไม่ครบ')+button('finish','จบงาน',true);
     if(t.status==='paused')actions+=button('resume','ทำงานต่อ',true)+button('partial','เบิกไม่ครบ');
@@ -219,7 +234,7 @@ function reportFiltersText(filters){
 function populateReport(list,filters){
   const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]++;});
   const rows=list.map((ticket,index)=>{
-    const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)}</span>`).join('')}</div>`:'';
+    const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)} · ${line.confirmed_at?`เบิกจริง ${qtyText(line.actual_qty)} · ขาด ${qtyText(Math.max(0,line.required_qty-line.actual_qty))} ${esc(line.unit)} ${esc(line.short_reason||'')}`:'ยังไม่ยืนยันเบิกจริง'}</span>`).join('')}</div>`:'';
     const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="9">${materials}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
     const status=statusLabels[ticket.status]||ticket.status;
     return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong></td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td></tr>${detail}</tbody>`;
@@ -260,22 +275,24 @@ function historyChanges(event){
   const before=event.before_state||{},after=event.after_state||{};
   const fields=[['ticket_no','เลขที่ใบเบิก'],['job_type_id','Job'],['assignee_id','พนักงาน'],['description','หมายเหตุ'],['requested_qty','จำนวน FG'],['started_at','เวลาเริ่ม'],['ended_at','เวลาสิ้นสุด']];
   const display=(key,value)=>key==='job_type_id'?jobFor(value):key==='assignee_id'?nameFor(value):key==='requested_qty'?qtyText(value):['started_at','ended_at'].includes(key)?fmtAudit(value):String(value||'—');
-  return fields.filter(([key])=>before[key]!==after[key]).map(([key,label])=>`<li><strong>${label}</strong> ${esc(display(key,before[key]))} → ${esc(display(key,after[key]))}</li>`).join('');
+  const picks=(after.materials||[]).flatMap((line,i)=>{const prev=before.materials?.[i];return line.actual_qty!==prev?.actual_qty||line.short_reason!==prev?.short_reason?[`<li><strong>${esc(line.pk_code)}</strong> เบิกจริง ${prev?.confirmed_at?qtyText(prev.actual_qty):'ยังไม่ยืนยัน'} → ${line.confirmed_at?qtyText(line.actual_qty):'ยังไม่ยืนยัน'} ${esc(line.unit)} · ${esc(line.short_reason||'')}</li>`]:[];}).join('');
+  return picks+fields.filter(([key])=>before[key]!==after[key]).map(([key,label])=>`<li><strong>${label}</strong> ${esc(display(key,before[key]))} → ${esc(display(key,after[key]))}</li>`).join('');
 }
 async function openHistory(ticket){
   $('#history-title').textContent=`ประวัติ ${ticket.ticket_no}`;$('#history-list').innerHTML=empty('กำลังโหลดประวัติ…');$('#history-dialog').showModal();
   const {data,error}=await state.db.rpc('get_ticket_history',{p_ticket_id:ticket.id});
   if(error){$('#history-list').innerHTML=empty(`โหลดประวัติไม่สำเร็จ: ${error.message}`);return;}
-  $('#history-list').innerHTML=data?.length?data.map(event=>`<article class="history-event"><div class="history-event-head"><strong>${esc(eventLabels[event.event_type]||event.event_type)}</strong><time>${esc(fmt(event.created_at))}</time></div><div class="history-actor">${esc(event.actor_role==='supervisor'?'หัวหน้า':event.actor_role==='operator'?'ผู้ปฏิบัติงาน':'ระบบ')} · ${esc(event.actor_username)}</div>${event.reason?`<p><strong>เหตุผล:</strong> ${esc(event.reason)}</p>`:''}${event.event_type==='edited'?`<ul>${historyChanges(event)}</ul>`:''}</article>`).join(''):empty('ยังไม่มีประวัติ');
+  $('#history-list').innerHTML=data?.length?data.map(event=>`<article class="history-event"><div class="history-event-head"><strong>${esc(eventLabels[event.event_type]||event.event_type)}</strong><time>${esc(fmt(event.created_at))}</time></div><div class="history-actor">${esc(event.actor_role==='supervisor'?'หัวหน้า':event.actor_role==='operator'?'ผู้ปฏิบัติงาน':'ระบบ')} · ${esc(event.actor_username)}</div>${event.reason?`<p><strong>เหตุผล:</strong> ${esc(event.reason)}</p>`:''}${['edited','completed','partial'].includes(event.event_type)?`<ul>${historyChanges(event)}</ul>`:''}</article>`).join(''):empty('ยังไม่มีประวัติ');
 }
 
 document.addEventListener('click',async e=>{
   const removeStock=e.target.closest('[data-remove-stock]');if(removeStock){state.stockLines.splice(Number(removeStock.dataset.removeStock),1);renderStockLines();return;}
   const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
-  if(e.target.closest('[data-dashboard-tickets]')){showView('tickets');return;}
+  if(e.target.closest('[data-dashboard-tickets]')){$('#ticket-date-from').value=$('#dashboard-from').value;$('#ticket-date-to').value=$('#dashboard-to').value;$('#ticket-job-filter').value=$('#dashboard-job').value;$('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-filter').value='all';renderTickets();showView('tickets');return;}
   const action=e.target.closest('button[data-action]');if(action){
     const kind=action.dataset.action,ticket=state.tickets.find(t=>t.id===action.dataset.id);
     if(!ticket)return;
+    if(operator()&&['picks','finish','partial'].includes(kind)&&ticket.materials?.length){openPicks(ticket,kind==='finish'?'done':kind==='partial'?'partial':null);return;}
     if(kind==='history'){await openHistory(ticket);return;}
     if(kind==='edit'&&supervisor()){openEdit(ticket);return;}
     if(kind in eventConfig){if((kind==='cancel'&&supervisor())||(kind!=='cancel'&&operator()))openEvent(kind,ticket);return;}
@@ -407,3 +424,26 @@ document.addEventListener('change',async e=>{let fn,args;if(e.target.matches('[d
 
 async function boot(){if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){syncLabel('ยังไม่ตั้งค่าฐานข้อมูล');notice('ยังไม่ได้ตั้งค่าฐานข้อมูลกลาง',true);return;}state.db=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});if(state.role&&state.username&&state.code){const {data,error}=await state.db.rpc('verify_role_code',{p_role:state.role,p_username:state.username,p_code:state.code});if(!error&&data)state.verified=true;else clearRole();}updateMode();await load();setInterval(()=>{if(!document.hidden)load(true)},15000);}
 boot();
+
+let pendingPicks=null;
+function openPicks(ticket,closeStatus){
+  pendingPicks={id:ticket.id,materials:structuredClone(ticket.materials),status:ticket.status,closeStatus};
+  $('#pick-title').textContent=(closeStatus==='done'?'ยืนยันและจบงาน':closeStatus==='partial'?'ยืนยันและปิดเบิกไม่ครบ':'ยืนยันเบิกจริง')+' · '+ticket.ticket_no;
+  $('#pick-message').textContent='';$('#pick-save').textContent=closeStatus?'บันทึกและปิดงาน':'บันทึกเบิกจริง';
+  $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><label>จำนวนเบิกจริง<input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="${Number(l.required_qty)}" step="0.0001" value="${l.confirmed_at?Number(l.actual_qty):''}"></label><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>เหตุผลที่เบิกขาด<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
+  updatePickShorts();$('#pick-dialog').showModal();
+}
+function updatePickShorts(){pendingPicks.materials.forEach((l,i)=>{const value=$('[data-pick-qty="'+i+'"]').value,qty=Number(value),short=value!==''&&qty<Number(l.required_qty);$('[data-pick-short="'+i+'"]').textContent=value===''?'ยังไม่ยืนยัน':'ขาด '+qtyText(Math.max(0,l.required_qty-qty))+' '+l.unit;$('[data-pick-reason="'+i+'"]').required=short;});}
+$('#pick-lines').addEventListener('input',updatePickShorts);
+$('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pick-full]');if(b){const i=Number(b.dataset.pickFull);$('[data-pick-qty="'+i+'"]').value=pendingPicks.materials[i].required_qty;updatePickShorts();}});
+$('#pick-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!pendingPicks||!operator())return;
+  const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:$('[data-pick-qty="'+i+'"]').value===''?null:Number($('[data-pick-qty="'+i+'"]').value),short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
+  const error=pickError(p.materials,picks,p.closeStatus);if(error){$('#pick-message').textContent=error;return;}
+  $('#pick-save').disabled=true;
+  try{if(await mutate('confirm_ticket_picks_as_operator',{p_ticket_id:p.id,p_expected_materials:p.materials,p_expected_status:p.status,p_picks:picks,p_close_status:p.closeStatus},p.closeStatus?'บันทึกเบิกจริงและปิดงานแล้ว':'บันทึกเบิกจริงแล้ว','#pick-message'))$('#pick-dialog').close();}finally{$('#pick-save').disabled=false;}
+});
+$('#dashboard-period').addEventListener('change',renderDashboard);
+$('#dashboard-job').addEventListener('change',renderDashboard);
+['#dashboard-from','#dashboard-to'].forEach(s=>$(s).addEventListener('change',()=>{$('#dashboard-period').value='custom';renderDashboard();}));
+$('#dashboard-reset').addEventListener('click',()=>{$('#dashboard-period').value='all';$('#dashboard-job').value='';renderDashboard();});
