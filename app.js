@@ -2,6 +2,7 @@ import { workMinutes, workDurationText } from './work-duration.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode } from './picking.mjs?v=3';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
+import { splitTicketNumbers, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
 import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
@@ -9,7 +10,7 @@ import { filterTickets } from './ticket-report.mjs';
 import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=2';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
-import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs';
+import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=2';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -126,16 +127,22 @@ function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hid
 function showTicketNumberConflict(){
   const input=$('#ticket-form [name="ticket_no"]'),number=input.value.trim();
   const suggestion=suggestTicketNumber(state.tickets,number);
-  $('#ticket-no-message').textContent=`เลขที่ใบเบิก ${number} มีอยู่แล้ว กรุณาใช้เลขอื่น`;
+  $('#ticket-no-message').textContent='เลขที่ใบเบิกบางใบมีอยู่แล้ว กรุณาตรวจสอบแต่ละเลขที่';
   const button=$('#ticket-no-suggestion');button.hidden=!suggestion;
   if(suggestion){button.textContent=`ใช้เลข ${suggestion}`;button.dataset.suggestion=suggestion;}
   input.setAttribute('aria-invalid','true');input.focus();
 }
 function checkTicketNumber(){
   const input=$('#ticket-form [name="ticket_no"]');
+  updateDocumentCount(input);
+  const error=ticketNumbersError(input.value);if(error){$('#ticket-no-message').textContent=error;input.setAttribute('aria-invalid','true');return false;}
   if(ticketNumberExists(state.tickets,input.value)){showTicketNumberConflict();return false;}
   $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;
   input.removeAttribute('aria-invalid');return true;
+}
+function updateDocumentCount(input){
+  const form=input.closest('form'),hint=form.querySelector('[data-document-count]');
+  if(hint)hint.textContent=input.value.trim()?`${new Set(splitTicketNumbers(input.value).map(ref=>ref.toUpperCase())).size} ใบ · รวมเป็น 1 งาน ใช้เวลาเริ่ม–จบชุดเดียว`:'กรอกเลขที่แต่ละใบ คั่นด้วยช่องว่างหรือ ,';
 }
 function syncLabel(msg,ok=false){$('#sync-label').textContent=msg;$('.sync-dot').classList.toggle('online',ok);}
 function updateMode(){
@@ -167,7 +174,7 @@ function renderExperienceMatrix(people,jobs,tickets){
     const workload=completedJobWorkload(person.id,job.id,tickets);
     const level=automaticSkill(workload.tickets);
     const assessed=state.skills.find(skill=>skill.profile_id===person.id&&skill.job_type_id===job.id)?.level||0;
-    return `<td><div class="experience-cell"><span class="skill-badge level-${level}" aria-label="ประสบการณ์ระดับ ${level}">${level}</span><div class="experience-detail"><strong>${qtyText(workload.tickets)} ใบจบ · ${qtyText(workload.materialLines)} รายการ</strong><span>รายการวัสดุตามใบเบิกที่จบ</span><span class="experience-assessment">หัวหน้าประเมิน: ${assessed?`ระดับ ${assessed}`:'ยังไม่ประเมิน'}</span></div></div></td>`;
+    return `<td><div class="experience-cell"><span class="skill-badge level-${level}" aria-label="ประสบการณ์ระดับ ${level}">${level}</span><div class="experience-detail"><strong>${qtyText(totalDocuments(tickets.filter(t=>t.assignee_id===person.id&&t.job_type_id===job.id&&t.status==='done')))} ใบ · ${qtyText(workload.tickets)} งานจบ · ${qtyText(workload.materialLines)} รายการ</strong><span>รายการวัสดุตามใบเบิกที่จบ</span><span class="experience-assessment">หัวหน้าประเมิน: ${assessed?`ระดับ ${assessed}`:'ยังไม่ประเมิน'}</span></div></div></td>`;
   }).join('')}</tr>`).join('')}</tbody></table>`;
 }
 function renderDashboard(){
@@ -178,10 +185,10 @@ function renderDashboard(){
   const filters={dateFrom:$('#dashboard-from').value,dateTo:$('#dashboard-to').value,jobId:jobSelect.value};
   const invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
   const t=filterTickets(state.tickets,filters);
-  $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${t.length} ใบ · วันที่สร้างใบเบิก (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
+  $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${totalDocuments(t)} ใบ · ${t.length} งาน · วันที่สร้างใบเบิก (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
   $('#dashboard-scope').classList.toggle('error',!!invalid);
-  $('#dashboard-total').textContent=qtyText(t.length);
-  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<div class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(t.filter(x=>x.status===status).length)}</div></div>`).join('');
+  $('#dashboard-total').textContent=qtyText(totalDocuments(t));
+  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<div class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(totalDocuments(t.filter(x=>x.status===status)))}</div><div class="hint">${t.filter(x=>x.status===status).length} งาน</div></div>`).join('');
   const people=state.people.filter(p=>p.active).sort((a,b)=>{
     const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
@@ -192,7 +199,7 @@ function renderDashboard(){
     const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
     const closed=perf.done+perf.partial;
     const picks=confirmedPickSummary(t.filter(ticket=>ticket.assignee_id===p.id));
-    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(perf.total)} ใบเบิก</span></div></div><div class="workload-summary"><div><strong>${qtyText(perf.done)}</strong><span>ใบที่จบ</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="pick-summary">ยืนยันแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · เบิกเกิน ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>เบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} ใบ)` : ''}</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="pick-summary">ยืนยันแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · เบิกเกิน ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
   $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);
   const active=t.filter(x=>['active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
@@ -219,7 +226,7 @@ function ticketHtml(t){
   const varianceLines=(t.materials||[]).filter(line=>line.confirmed_at&&typeof line.actual_qty==='number'&&Math.round((line.actual_qty-Number(line.required_qty))*10000)!==0);
   const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>รายการเบิกขาดหรือเกิน · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
   const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials" data-material-ticket="${esc(t.id)}"${expandedTickets.has(t.id)?' open':''}><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
-  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
+  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value};}
 function setSelectOptions(select,html){if(select.dataset.optionsHtml!==html){select.innerHTML=html;select.dataset.optionsHtml=html;}}
@@ -242,7 +249,7 @@ function renderTickets(){
   renderTicketFilterOptions();
   const filters=ticketFilters(),invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
   const list=selectedTickets();
-  $('#ticket-count').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`${list.length} จาก ${filters.status==='deleted'?state.deletedTickets.length:state.tickets.length} รายการ`;
+  $('#ticket-count').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`${totalDocuments(list)} ใบ · ${list.length} งาน จาก ${filters.status==='deleted'?state.deletedTickets.length:state.tickets.length} รายการ`;
   $('#print-report-btn').disabled=!!invalid;
   $('#ticket-list').innerHTML=invalid?empty('กรุณาแก้ไขช่วงวันที่'):list.length?list.map(ticketHtml).join(''):empty('ไม่พบใบเบิกตามตัวกรอง');
 }
@@ -256,14 +263,14 @@ function reportFiltersText(filters){
   return parts.length?parts.join(' · '):'ทุกใบเบิก';
 }
 function populateReport(list,filters){
-  const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]++;});
+  const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]+=ticketDocumentCount(ticket);});
   const rows=list.map((ticket,index)=>{
     const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)} · ${line.confirmed_at?`เบิกจริง ${qtyText(line.actual_qty)} · ${esc(pickVarianceText(line.required_qty,line.actual_qty,line.unit,qtyText))} ${esc(line.short_reason||'')}`:'ยังไม่ยืนยันเบิกจริง'}</span>`).join('')}</div>`:'';
     const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="10">${materials}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
     const status=statusLabels[ticket.status]||ticket.status;
-    return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong></td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td><td>${esc(workDurationText(ticket.started_at,ticket.ended_at))}</td></tr>${detail}</tbody>`;
+    return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong><br>${ticketDocumentCount(ticket)} ใบ · 1 งาน</td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td><td>${esc(workDurationText(ticket.started_at,ticket.ended_at))}</td></tr>${detail}</tbody>`;
   }).join('');
-  $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${list.length}</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>ประเภทงาน</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>เวลาทำงาน<br>(หักพักเที่ยง)</th></tr></thead>${rows||'<tbody><tr><td colspan="9">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก · เวลาทำงานหักช่วง 12:00–13:00 ของแต่ละวันตามเวลาไทย</p>`;
+  $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${totalDocuments(list)} ใบ · ${list.length} งาน</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>ประเภทงาน</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>เวลาทำงาน<br>(หักพักเที่ยง)</th></tr></thead>${rows||'<tbody><tr><td colspan="10">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก · เวลาทำงานหักช่วง 12:00–13:00 ของแต่ละวันตามเวลาไทย</p>`;
 }
 function printReport(){const list=selectedTickets();populateReport(list,ticketFilters());document.body.classList.add('print-tickets');window.print();}
 function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><button type="button" class="text-btn" data-edit-person="${esc(p.id)}">แก้ไขชื่อ</button><label class="staff-photo-button">เปลี่ยนรูป<input type="file" accept="image/jpeg,image/png,image/webp" data-staff-photo="${esc(p.id)}" aria-label="เปลี่ยนรูป ${esc(p.display_name)}"></label><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
@@ -287,7 +294,7 @@ function openEvent(kind,ticket){
 function openEdit(ticket){
   editingTicketId=ticket.id;const form=$('#ticket-edit-form');form.reset();
   $('#ticket-edit-message').textContent='';
-  form.elements.ticket_no.value=ticket.ticket_no;
+  form.elements.ticket_no.value=ticket.ticket_no;updateDocumentCount(form.elements.ticket_no);
   form.elements.job_type_id.innerHTML=state.jobs.filter(j=>j.active||j.id===ticket.job_type_id).map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
   form.elements.assignee_id.innerHTML=state.people.filter(p=>p.active||p.id===ticket.assignee_id).map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join('');
   form.elements.job_type_id.value=ticket.job_type_id;form.elements.assignee_id.value=ticket.assignee_id;
@@ -348,6 +355,7 @@ $('#event-form').addEventListener('submit',async e=>{
 $('#ticket-edit-form').addEventListener('submit',async e=>{
   e.preventDefault();if(!supervisor()||!editingTicketId)return;
   const f=new FormData(e.target),ticket=state.tickets.find(t=>t.id===editingTicketId);if(!ticket)return;
+  const numberError=ticketNumbersError(f.get('ticket_no'));if(numberError){$('#ticket-edit-message').textContent=numberError;return;}
   const qty=ticket.fg_code?Number(e.target.elements.requested_qty.value):null,reason=String(f.get('reason')||'').trim();
   if(!reason||ticket.fg_code&&(!Number.isFinite(qty)||qty<=0||qty>1000000||Math.round(qty*1000)!==qty*1000)){$('#ticket-edit-message').textContent='กรุณาระบุเหตุผลและจำนวนสินค้าสำเร็จรูป (FG) ที่ถูกต้อง';return;}
   const startValue=e.target.elements.started_at.value,endValue=e.target.elements.ended_at.value;
@@ -387,7 +395,7 @@ window.addEventListener('afterprint',()=>document.body.classList.remove('print-t
 $('#new-ticket-btn').addEventListener('click',async()=>{
   const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
   if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
-  state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();
+  state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();updateDocumentCount($('#ticket-form [name="ticket_no"]'));
   $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;$('#ticket-form [name="ticket_no"]').removeAttribute('aria-invalid');
   const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
   if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
@@ -505,3 +513,5 @@ $('#dashboard-period').addEventListener('change',renderDashboard);
 $('#dashboard-job').addEventListener('change',renderDashboard);
 ['#dashboard-from','#dashboard-to'].forEach(s=>$(s).addEventListener('change',()=>{$('#dashboard-period').value='custom';renderDashboard();}));
 $('#dashboard-reset').addEventListener('click',()=>{$('#dashboard-period').value='all';$('#dashboard-job').value='';renderDashboard();});
+
+$('#ticket-edit-form [name="ticket_no"]').addEventListener('input',e=>updateDocumentCount(e.target));

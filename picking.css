@@ -55,3 +55,6 @@
 .pick-line [data-pick-reason]:required{border-left:3px solid var(--amber)}
 .dialog-content .form-message:empty{display:none}
 @media(max-width:560px){.ticket-right{width:100%;border-top:1px solid var(--line);padding-top:12px}.ticket-actions{display:flex;flex-wrap:wrap;gap:6px}.ticket-actions button{min-height:40px}.bom-table td:nth-child(3){min-width:175px}}
+.document-count-hint{margin:-8px 0 0;padding:9px 12px;background:var(--surface-raised);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:13px;line-height:1.7}
+.ticket-document-count{display:inline-block;margin:6px 0;font-size:12px;font-weight:600;color:var(--ink);padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface-raised)}
+.ticket-code{overflow-wrap:anywhere;line-height:1.7}

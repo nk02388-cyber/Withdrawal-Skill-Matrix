@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {pickVarianceText} from '../picking.mjs';
+import {ticketDocumentCount} from '../withdrawal-documents.mjs';
 
 const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
 const table=source.slice(source.indexOf('function materialTable('),source.indexOf('function renderBomOptions('));
@@ -10,6 +11,7 @@ const renderer=source.slice(source.indexOf('function ticketHtml('),source.indexO
 const expandedTickets=new Set();
 const html=runInNewContext(table+renderer+';ticketHtml',{
   expandedTickets,
+  ticketDocumentCount,
   esc:v=>String(v??'').replace(/</g,'&lt;'),qtyText:v=>String(v),pickVarianceText,
   statusLabels:{done:'เสร็จแล้ว'},operator:()=>false,supervisor:()=>false,
   workMinutes:()=>null,jobFor:()=> 'Job',nameFor:()=> 'พนักงาน',fmt:()=> '—',
