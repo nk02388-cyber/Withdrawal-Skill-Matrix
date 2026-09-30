@@ -43,7 +43,9 @@ const expandedTickets=new Set();
 const chosenFormula = () => state.bom?.formulas.find(f=>f.fg_code===state.selectedFormulaCode);
 function materialTable(lines){return '<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส / วัสดุ</th><th>ต้องเบิก</th><th>เบิกจริง / ขาด–เกิน</th></tr></thead><tbody>'+lines.map(l=>{
   const confirmed=l.confirmed_at&&typeof l.actual_qty==='number';
-  return `<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small><small>${l.source==='stock'?'นอก BOM':'BOM'}</small></td><td>${qtyText(l.required_qty)} ${esc(l.unit)}</td><td>${confirmed?`<strong>จริง ${qtyText(l.actual_qty)} ${esc(l.unit)}</strong><small>${esc(pickVarianceText(l.required_qty,l.actual_qty,l.unit,qtyText))}</small>${l.short_reason?'<small>เหตุผล: '+esc(l.short_reason)+'</small>':''}`:'ยังไม่ยืนยัน'}</td></tr>`;
+  const delta=confirmed?Math.round((l.actual_qty-Number(l.required_qty))*10000):0;
+  const varianceClass=delta<0?'pick-short':delta>0?'pick-over':'';
+  return `<tr class="${varianceClass}"><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small><small>${l.source==='stock'?'นอก BOM':'BOM'}</small></td><td>${qtyText(l.required_qty)} ${esc(l.unit)}</td><td>${confirmed?`${varianceClass?`<span class="pick-variance-badge ${varianceClass}">${delta<0?'▼':'▲'} ${esc(pickVarianceText(l.required_qty,l.actual_qty,l.unit,qtyText))}</span>`:''}<strong>เบิกจริง ${qtyText(l.actual_qty)} ${esc(l.unit)}</strong>${varianceClass?'':`<small>ครบตามใบเบิก</small>`}${l.short_reason?'<small class="pick-variance-reason">เหตุผล: '+esc(l.short_reason)+'</small>':''}`:'ยังไม่ยืนยัน'}</td></tr>`;
 }).join('')+'</tbody></table></div>';}
 function renderBomOptions(){
   if(!state.bom){$('#bom-results').innerHTML='';$('#bom-source').textContent='โหลด BOM ไม่สำเร็จ';renderBomPreview();return;}
