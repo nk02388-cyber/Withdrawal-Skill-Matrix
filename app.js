@@ -1,13 +1,13 @@
-import { workMinutes, workDurationText } from './work-duration.mjs';
+import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode } from './picking.mjs?v=3';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
-import { splitTicketNumbers, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
+import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
 import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
-import { filterTickets } from './ticket-report.mjs';
-import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=2';
+import { filterTickets } from './ticket-report.mjs?v=2';
+import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=3';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
 import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=2';
@@ -18,7 +18,7 @@ const fmt = formatBangkokDateTime;
 const fmtReport = formatBangkokDateTime;
 const fmtAudit = v => v ? new Intl.DateTimeFormat('th-TH',{dateStyle:'short',timeStyle:'medium',timeZone:'Asia/Bangkok'}).format(new Date(v)) : '—';
 sessionStorage.removeItem('editCode');
-const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,people:[],jobs:[],tickets:[],deletedTickets:[],skills:[],bom:null,selectedFormulaCode:'',stock:null,stockLines:[],view:'dashboard'};
+const state = {db:null,role:sessionStorage.getItem('workRole')||'',username:sessionStorage.getItem('workUsername')||'',code:sessionStorage.getItem('workCode')||'',verified:false,actorId:sessionStorage.getItem('workActorId')||'',standards:[],people:[],jobs:[],tickets:[],deletedTickets:[],skills:[],bom:null,selectedFormulaCode:'',stock:null,stockLines:[],view:'dashboard'};
 const editing = () => state.verified && !!state.code;
 const supervisor = () => editing() && state.role==='supervisor';
 const operator = () => editing() && state.role==='operator';
@@ -48,7 +48,7 @@ function materialTable(lines){return '<div class="bom-table-wrap"><table class="
   const confirmed=l.confirmed_at&&typeof l.actual_qty==='number';
   const delta=confirmed?Math.round((l.actual_qty-Number(l.required_qty))*10000):0;
   const varianceClass=delta<0?'pick-short':delta>0?'pick-over':'';
-  return `<tr class="${varianceClass}"><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small><small>${l.source==='stock'?'นอก BOM':'BOM'}</small></td><td>${qtyText(l.required_qty)} ${esc(l.unit)}</td><td>${confirmed?`${varianceClass?`<span class="pick-variance-badge ${varianceClass}">${delta<0?'▼':'▲'} ${esc(pickVarianceText(l.required_qty,l.actual_qty,l.unit,qtyText))}</span>`:''}<strong>เบิกจริง ${qtyText(l.actual_qty)} ${esc(l.unit)}</strong>${varianceClass?'':`<small>ครบตามใบเบิก</small>`}${l.short_reason?'<small class="pick-variance-reason">เหตุผล: '+esc(l.short_reason)+'</small>':''}`:'ยังไม่ยืนยัน'}</td></tr>`;
+  return `<tr class="${varianceClass}"><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small><small>${l.source==='stock'?'นอก BOM':'BOM'}</small></td><td>${qtyText(l.required_qty)} ${esc(l.unit)}</td><td>${confirmed?`${varianceClass?`<span class="pick-variance-badge ${varianceClass}">${delta<0?'▼':'▲'} ${esc(pickVarianceText(l.required_qty,l.actual_qty,l.unit,qtyText))}</span>`:''}<strong>เบิกจริง ${qtyText(l.actual_qty)} ${esc(l.unit)}</strong>${varianceClass?'':`<small>ครบตามใบเบิก</small>`}${l.short_reason?'<small class="pick-variance-reason">'+esc(reasonLabels[l.reason_code]||'ยังไม่ระบุประเภทเหตุผล')+' · '+esc(l.short_reason)+'</small>':''}`:'ยังไม่ยืนยัน'}</td></tr>`;
 }).join('')+'</tbody></table></div>';}
 function renderBomOptions(){
   if(!state.bom){$('#bom-results').innerHTML='';$('#bom-source').textContent='โหลด BOM ไม่สำเร็จ';renderBomPreview();return;}
@@ -72,7 +72,7 @@ function renderBomPreview(){
 }
 const stockMode=()=>document.querySelector('#ticket-form [name="source_mode"]:checked')?.value==='stock';
 function setTicketMode(){
-  const manual=stockMode();$('#bom-fields').hidden=manual;
+  const manual=stockMode();$('#bom-fields').hidden=manual;$('#ticket-form').dataset.hasFg=String(!manual);renderDocuments($('#ticket-form'));
   $('#bom-search').required=!manual;
   $('#ticket-form [name="requested_qty"]').required=!manual;
   if(!manual)renderBomPreview();
@@ -142,12 +142,13 @@ function checkTicketNumber(){
 }
 function updateDocumentCount(input){
   const form=input.closest('form'),hint=form.querySelector('[data-document-count]');
-  if(hint)hint.textContent=input.value.trim()?`${new Set(splitTicketNumbers(input.value).map(ref=>ref.toUpperCase())).size} ใบ · รวมเป็น 1 งาน ใช้เวลาเริ่ม–จบชุดเดียว`:'กรอกเลขที่แต่ละใบ คั่นด้วยช่องว่างหรือ ,';
+  if(form.dataset.hasFg!==undefined)renderDocuments(form);
+  if(hint)hint.textContent=input.value.trim()?`${new Set(ticketReferences({ticket_no:input.value,fg_code:form.dataset.hasFg==='true'?'selected':null}).map(ref=>ref.toUpperCase())).size} ใบ · รวมเป็น 1 งาน ใช้เวลาเริ่ม–จบชุดเดียว`:'กรอกเลขที่แต่ละใบ คั่นด้วยช่องว่างหรือ ,';
 }
 function syncLabel(msg,ok=false){$('#sync-label').textContent=msg;$('.sync-dot').classList.toggle('online',ok);}
 function updateMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.hidden=!supervisor());
-  $('#user-label').textContent=supervisor()?`หัวหน้า · ${state.username}`:operator()?`ผู้ปฏิบัติงาน · ${state.username}`:'โหมดดูข้อมูล';
+  $('#user-label').textContent=supervisor()?`หัวหน้า · ${state.username}`:operator()?`ผู้ทำรายการ · ${nameFor(state.actorId)}`:'โหมดดูข้อมูล';
   $('#edit-btn').textContent=editing()?'ออกจากโหมด':'เข้าสู่โหมดทำงาน';
   if(!supervisor()&&['people','settings'].includes(state.view))showView('dashboard');
   const trash=$('#ticket-filter option[value=deleted]');if(trash)trash.remove();
@@ -161,7 +162,7 @@ async function load(silent=false){
   syncLabel('กำลังซิงก์…');
   const {data,error}=await state.db.rpc('get_dashboard_state');
   if(error){syncLabel('ซิงก์ไม่สำเร็จ');if(!silent)notice(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`,true);return;}
-  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];
+  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];state.standards=data.standards||[];
   state.deletedTickets=[];
   if(supervisor()){const trash=await state.db.rpc('get_deleted_tickets_as_supervisor',{p_username:state.username,p_code:state.code});if(trash.error){if(!silent)notice('โหลดถังขยะไม่สำเร็จ',true);}else if(supervisor())state.deletedTickets=trash.data||[];}
   syncLabel(`อัปเดต ${formatBangkokClock(Date.now())} น. (เวลาไทย)`,true);
@@ -182,28 +183,28 @@ function renderDashboard(){
   setSelectOptions(jobSelect,'<option value="">ทุกประเภทงาน</option>'+state.jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join(''));jobSelect.value=jobId;
   const preset=$('#dashboard-period').value;
   if(preset!=='custom'){const range=presetDates(preset);$('#dashboard-from').value=range.dateFrom;$('#dashboard-to').value=range.dateTo;}
-  const filters={dateFrom:$('#dashboard-from').value,dateTo:$('#dashboard-to').value,jobId:jobSelect.value};
+  const filters={dateFrom:$('#dashboard-from').value,dateTo:$('#dashboard-to').value,jobId:jobSelect.value,dateBasis:$('#dashboard-date-basis').value};
   const invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
   const t=filterTickets(state.tickets,filters);
-  $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${totalDocuments(t)} ใบ · ${t.length} งาน · วันที่สร้างใบเบิก (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
+  $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${totalDocuments(t)} ใบ · ${t.length} งาน · ${dateBasisLabel(filters.dateBasis)} (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
   $('#dashboard-scope').classList.toggle('error',!!invalid);
   $('#dashboard-total').textContent=qtyText(totalDocuments(t));
-  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<div class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(totalDocuments(t.filter(x=>x.status===status)))}</div><div class="hint">${t.filter(x=>x.status===status).length} งาน</div></div>`).join('');
+  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<button type="button" data-metric-status="${status}" class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(totalDocuments(t.filter(x=>x.status===status)))}</div><div class="hint">${t.filter(x=>x.status===status).length} งาน</div></button>`).join('');
   const people=state.people.filter(p=>p.active).sort((a,b)=>{
     const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
   }),jobs=state.jobs.filter(j=>(j.active||j.id===jobId)&&(!jobId||j.id===jobId));
   $('#performance-list').innerHTML=people.length?people.map(p=>{
-    const perf=personPerformance(p.id,t);
+    const own=t.filter(ticket=>ticket.assignee_id===p.id),quality=operationalPerformance(own,state.standards);const perf=personPerformance(p.id,t);
     const materialLines=t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done').reduce((sum,ticket)=>sum+(Array.isArray(ticket.materials)?ticket.materials.length:0),0);
     const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
     const closed=perf.done+perf.partial;
     const picks=confirmedPickSummary(t.filter(ticket=>ticket.assignee_id===p.id));
-    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="pick-summary">ยืนยันแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · เบิกเกิน ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลามัธยฐาน</span></div></div></article>`;
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="quality-summary">ข้อมูลครบ ${quality.complete} งาน · หยิบผิดที่ระบุเหตุผล ${quality.pickingErrors} รายการ · ต้องตรวจเหตุผล ${quality.reviewNeeded} รายการ<br>เทียบมาตรฐาน: ${quality.efficiency===null?'ยังไม่มีงานที่ข้อมูลครบและมาตรฐานตรงกัน':quality.efficiency+'% จาก '+quality.matched+' งาน'}</p><p class="pick-summary">บันทึกแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · เบิกเกิน ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลาสุทธิมัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
-  $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);
-  const active=t.filter(x=>['active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
-  $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานที่กำลังทำหรือพักอยู่</strong><span>ใบเบิกที่เริ่มงานแล้วจะแสดงที่นี่</span></div>`;
+  $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);renderAttention();
+  const active=t.filter(x=>['queued','active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
+  $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานรอเริ่ม กำลังทำ หรือพักอยู่</strong><span>งานที่ยังเปิดจะแสดงที่นี่</span></div>`;
 }
 function ticketHtml(t){
   const status=statusLabels[t.status]||t.status;
@@ -222,13 +223,13 @@ function ticketHtml(t){
     if(['queued','active','paused'].includes(t.status))actions+=button('cancel','ยกเลิก');
   }
   actions+=button('history','ประวัติ');
-  const duration=workMinutes(t.started_at,t.ended_at)===null?'':` · ${workDurationText(t.started_at,t.ended_at)} (หักพักเที่ยง)`;
+  const timing=workBreakdown(t),completion=pickCompleteness(t);const duration=timing?`<br>ทำงานสุทธิ ${minutesText(timing.activeMinutes)}<br>พักในกะ ${minutesText(timing.waitingMinutes)} · รวม ${minutesText(timing.totalMinutes)}`:'';
   const varianceLines=(t.materials||[]).filter(line=>line.confirmed_at&&typeof line.actual_qty==='number'&&Math.round((line.actual_qty-Number(line.required_qty))*10000)!==0);
   const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>รายการเบิกขาดหรือเกิน · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
   const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials" data-material-ticket="${esc(t.id)}"${expandedTickets.has(t.id)?' open':''}><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
-  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div>${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
+  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div><div class="data-completeness ${completion.complete?'complete':'incomplete'}">${esc(completion.label)}</div>${documentSummary(t)}${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
-function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value};}
+function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value,dateBasis:$('#ticket-date-basis').value,completeness:$('#ticket-completeness').value};}
 function setSelectOptions(select,html){if(select.dataset.optionsHtml!==html){select.innerHTML=html;select.dataset.optionsHtml=html;}}
 function renderTicketFilterOptions(){
   for(const [selector,rows,placeholder,label] of [['#ticket-person-filter',state.people,'ทุกคน','display_name'],['#ticket-job-filter',state.jobs,'ทุกประเภทงาน','name']]){
@@ -258,7 +259,7 @@ function reportFiltersText(filters){
   if(filters.query.trim())parts.push(`เลขที่ใบเบิก: ${filters.query.trim()}`);
   if(filters.assigneeId)parts.push(`พนักงาน: ${nameFor(filters.assigneeId)}`);
   if(filters.jobId)parts.push(`Job: ${jobFor(filters.jobId)}`);
-  if(filters.dateFrom||filters.dateTo)parts.push(`วันที่สร้าง: ${filters.dateFrom||'ทั้งหมด'} ถึง ${filters.dateTo||'ทั้งหมด'}`);
+  if(filters.dateFrom||filters.dateTo)parts.push(`${dateBasisLabel(filters.dateBasis)}: ${filters.dateFrom||'ทั้งหมด'} ถึง ${filters.dateTo||'ทั้งหมด'}`);
   if(filters.status)parts.push(`สถานะ: ${statusLabels[filters.status]||filters.status}`);
   return parts.length?parts.join(' · '):'ทุกใบเบิก';
 }
@@ -266,18 +267,18 @@ function populateReport(list,filters){
   const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]+=ticketDocumentCount(ticket);});
   const rows=list.map((ticket,index)=>{
     const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)} · ${line.confirmed_at?`เบิกจริง ${qtyText(line.actual_qty)} · ${esc(pickVarianceText(line.required_qty,line.actual_qty,line.unit,qtyText))} ${esc(line.short_reason||'')}`:'ยังไม่ยืนยันเบิกจริง'}</span>`).join('')}</div>`:'';
-    const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="10">${materials}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
+    const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="10">${materials}<p>${esc(pickCompleteness(ticket).label)}</p>${documentSummary(ticket)}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
     const status=statusLabels[ticket.status]||ticket.status;
-    return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong><br>${ticketDocumentCount(ticket)} ใบ · 1 งาน</td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td><td>${esc(workDurationText(ticket.started_at,ticket.ended_at))}</td></tr>${detail}</tbody>`;
+    return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong><br>${ticketDocumentCount(ticket)} ใบ · 1 งาน</td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td><td>${esc(minutesText(workBreakdown(ticket)?.activeMinutes??null))}</td></tr>${detail}</tbody>`;
   }).join('');
-  $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${totalDocuments(list)} ใบ · ${list.length} งาน</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>ประเภทงาน</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>เวลาทำงาน<br>(หักพักเที่ยง)</th></tr></thead>${rows||'<tbody><tr><td colspan="10">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก · เวลาทำงานหักช่วง 12:00–13:00 ของแต่ละวันตามเวลาไทย</p>`;
+  $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${totalDocuments(list)} ใบ · ${list.length} งาน</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>ประเภทงาน</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>เวลาสุทธิ<br>(หักพัก/นอกกะ)</th></tr></thead>${rows||'<tbody><tr><td colspan="10">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก · เวลาสุทธิคิดเฉพาะกะ 08:00–17:00 หักพักเที่ยงและช่วงพักงานโดยไม่หักซ้ำ</p>`;
 }
 function printReport(){const list=selectedTickets();populateReport(list,ticketFilters());document.body.classList.add('print-tickets');window.print();}
 function renderPeople(){$('#people-list').innerHTML=state.people.length?state.people.map(p=>`<div class="person-row"><div class="matrix-person">${personPortrait(p)}<strong>${esc(p.display_name)}</strong></div><div class="person-controls"><button type="button" class="text-btn" data-edit-person="${esc(p.id)}">แก้ไขชื่อ</button><label class="staff-photo-button">เปลี่ยนรูป<input type="file" accept="image/jpeg,image/png,image/webp" data-staff-photo="${esc(p.id)}" aria-label="เปลี่ยนรูป ${esc(p.display_name)}"></label><label class="hint"><input type="checkbox" data-active="${esc(p.id)}" ${p.active?'checked':''}> เปิดใช้งาน</label></div></div>`).join(''):empty('ยังไม่มีพนักงาน');}
-function renderSettings(){if($('#skill-editor').contains(document.activeElement))return;const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);$('#job-list').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="job-row"><strong>${esc(j.name)}</strong><label class="hint"><input type="checkbox" data-job-active="${esc(j.id)}" ${j.active?'checked':''}> เปิดใช้งาน</label></div>`).join(''):empty('ยังไม่มีประเภทงาน');$('#skill-editor').innerHTML=!people.length||!jobs.length?empty('เพิ่มพนักงานและประเภทงานก่อนกำหนดทักษะ'):`<div class="matrix-wrap"><table class="skill-edit-table"><thead><tr><th>พนักงาน</th><th>ประเภทงาน</th><th>ระดับทักษะ</th></tr></thead><tbody>${people.flatMap(p=>jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<tr><td>${esc(p.display_name)}</td><td>${esc(j.name)}</td><td><select data-skill="${esc(p.id)}" data-job="${esc(j.id)}">${['ยังไม่ประเมิน','1 · เริ่มต้น','2 · ทำได้','3 · ชำนาญ','4 · สอนงานได้'].map((label,i)=>`<option value="${i}" ${i===level?'selected':''}>${label}</option>`).join('')}</select></td></tr>`})).join('')}</tbody></table></div>`;}
+function renderSettings(){renderStandards();if($('#skill-editor').contains(document.activeElement))return;const people=state.people.filter(p=>p.active),jobs=state.jobs.filter(j=>j.active);$('#job-list').innerHTML=state.jobs.length?state.jobs.map(j=>`<div class="job-row"><strong>${esc(j.name)}</strong><label class="hint"><input type="checkbox" data-job-active="${esc(j.id)}" ${j.active?'checked':''}> เปิดใช้งาน</label></div>`).join(''):empty('ยังไม่มีประเภทงาน');$('#skill-editor').innerHTML=!people.length||!jobs.length?empty('เพิ่มพนักงานและประเภทงานก่อนกำหนดทักษะ'):`<div class="matrix-wrap"><table class="skill-edit-table"><thead><tr><th>พนักงาน</th><th>ประเภทงาน</th><th>ระดับทักษะ</th></tr></thead><tbody>${people.flatMap(p=>jobs.map(j=>{const level=state.skills.find(s=>s.profile_id===p.id&&s.job_type_id===j.id)?.level||0;return `<tr><td>${esc(p.display_name)}</td><td>${esc(j.name)}</td><td><select data-skill="${esc(p.id)}" data-job="${esc(j.id)}">${['ยังไม่ประเมิน','1 · เริ่มต้น','2 · ทำได้','3 · ชำนาญ','4 · สอนงานได้'].map((label,i)=>`<option value="${i}" ${i===level?'selected':''}>${label}</option>`).join('')}</select></td></tr>`})).join('')}</tbody></table></div>`;}
 async function mutate(fn,args,success,errorTarget){return saveOnce(fn+':'+(args.p_ticket_id||args.p_staff_id||''),async()=>{
   try{
-    const {error}=await state.db.rpc(fn,{p_username:state.username,p_code:state.code,...args});
+    const {error}=await workAction(fn,args);
     if(error)throw error;
   }catch(error){const message=saveErrorText(error);if(errorTarget)$(errorTarget).textContent=message;else notice(message,true);return false;}
   if(errorTarget)$(errorTarget).textContent='';notice(success);
@@ -300,7 +301,7 @@ function openEdit(ticket){
   form.elements.job_type_id.value=ticket.job_type_id;form.elements.assignee_id.value=ticket.assignee_id;
   form.elements.description.value=ticket.description||'';
   form.elements.requested_qty.value=ticket.requested_qty||'';
-  form.elements.requested_qty.disabled=!ticket.fg_code;
+  form.elements.requested_qty.disabled=!ticket.fg_code;form.dataset.hasFg=String(!!ticket.fg_code);renderDocuments(form,ticket.documents||[]);
   form.elements.started_at.value=toBangkokInput(ticket.started_at);
   form.elements.ended_at.value=toBangkokInput(ticket.ended_at);
   form.elements.started_at.disabled=ticket.status==='queued'||ticket.status==='cancelled'&&!ticket.started_at;
@@ -321,14 +322,14 @@ async function openHistory(ticket){
   $('#history-title').textContent=`ประวัติ ${ticket.ticket_no}`;$('#history-list').innerHTML=empty('กำลังโหลดประวัติ…');$('#history-dialog').showModal();
   const {data,error}=await state.db.rpc('get_ticket_history',{p_ticket_id:ticket.id});
   if(error){$('#history-list').innerHTML=empty(`โหลดประวัติไม่สำเร็จ: ${error.message}`);return;}
-  $('#history-list').innerHTML=data?.length?data.map(event=>`<article class="history-event"><div class="history-event-head"><strong>${esc(eventLabels[event.event_type]||event.event_type)}</strong><time>${esc(fmt(event.created_at))}</time></div><div class="history-actor">${esc(event.actor_role==='supervisor'?'หัวหน้า':event.actor_role==='operator'?'ผู้ปฏิบัติงาน':'ระบบ')} · ${esc(event.actor_username)}</div>${event.reason?`<p><strong>เหตุผล:</strong> ${esc(event.reason)}</p>`:''}${['edited','completed','partial'].includes(event.event_type)?`<ul>${historyChanges(event)}</ul>`:''}</article>`).join(''):empty('ยังไม่มีประวัติ');
+  $('#history-list').innerHTML=data?.length?data.map(event=>`<article class="history-event"><div class="history-event-head"><strong>${esc(eventLabels[event.event_type]||event.event_type)}</strong><time>${esc(fmt(event.created_at))}</time></div><div class="history-actor">${esc(event.actor_role==='supervisor'?'หัวหน้า':event.actor_role==='operator'?'ผู้ปฏิบัติงาน':'ระบบ')} · ${esc(event.actor_username)}${event.actor_display_name?' · ผู้ทำรายการ: '+esc(event.actor_display_name):' · ไม่ได้ระบุตัวผู้ทำรายการ'}</div>${event.reason?`<p><strong>เหตุผล:</strong> ${esc(event.reason)}</p>`:''}${['edited','completed','partial'].includes(event.event_type)?`<ul>${historyChanges(event)}</ul>`:''}</article>`).join(''):empty('ยังไม่มีประวัติ');
 }
 
 document.addEventListener('click',async e=>{
   const editPerson=e.target.closest('[data-edit-person]');if(editPerson&&supervisor()){const person=state.people.find(p=>p.id===editPerson.dataset.editPerson);if(person){$('#staff-edit-form [name=staff_id]').value=person.id;$('#staff-edit-form [name=name]').value=person.display_name;$('#staff-edit-message').textContent='';$('#staff-edit-dialog').showModal();}return;}
   const removeStock=e.target.closest('[data-remove-stock]');if(removeStock){state.stockLines.splice(Number(removeStock.dataset.removeStock),1);renderStockLines();return;}
   const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
-  if(e.target.closest('[data-dashboard-tickets]')){$('#ticket-date-from').value=$('#dashboard-from').value;$('#ticket-date-to').value=$('#dashboard-to').value;$('#ticket-job-filter').value=$('#dashboard-job').value;$('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-filter').value='all';renderTickets();showView('tickets');return;}
+  if(e.target.closest('[data-dashboard-tickets]')){$('#ticket-date-basis').value=$('#dashboard-date-basis').value;$('#ticket-date-from').value=$('#dashboard-from').value;$('#ticket-date-to').value=$('#dashboard-to').value;$('#ticket-job-filter').value=$('#dashboard-job').value;$('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-filter').value='all';$('#ticket-completeness').value='all';renderTickets();showView('tickets');return;}
   const action=e.target.closest('button[data-action]');if(action){
     const kind=action.dataset.action,ticket=[...state.tickets,...state.deletedTickets].find(t=>t.id===action.dataset.id);
     if(!ticket)return;
@@ -362,11 +363,12 @@ $('#ticket-edit-form').addEventListener('submit',async e=>{
   const startedAt=fromBangkokInput(startValue,ticket.started_at),endedAt=fromBangkokInput(endValue,ticket.ended_at);
   const timeError=(startValue&&!startedAt||endValue&&!endedAt)?'รูปแบบเวลาไม่ถูกต้อง':timeEditError(ticket.status,startedAt,endedAt,Date.now(),ticket.started_at);
   if(timeError){$('#ticket-edit-message').textContent=timeError;return;}
-  const args={p_ticket_id:editingTicketId,p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_requested_qty:qty,p_started_at:startedAt,p_ended_at:endedAt,p_reason:reason};
+  const documentError=documentsError(readDocuments(e.target),qty,!!ticket.fg_code);if(documentError){$('#ticket-edit-message').textContent=documentError;return;}
+  const args={p_documents:readDocuments(e.target),p_ticket_id:editingTicketId,p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_requested_qty:qty,p_started_at:startedAt,p_ended_at:endedAt,p_reason:reason};
   if(await mutate('edit_ticket_with_times_as_supervisor',args,'แก้ไขใบเบิกและบันทึกประวัติแล้ว','#ticket-edit-message')){$('#ticket-edit-dialog').close();editingTicketId=null;}
 });
-function clearRole(){state.role='';state.username='';state.code='';state.verified=false;['workRole','workUsername','workCode'].forEach(key=>sessionStorage.removeItem(key));}
-$('#edit-btn').addEventListener('click',()=>{if(editing()){clearRole();updateMode();notice('ออกจากโหมดทำงานแล้ว');}else $('#code-dialog').showModal();});
+function clearRole(){state.role='';state.username='';state.code='';state.verified=false;state.actorId='';['workRole','workUsername','workCode','workActorId'].forEach(key=>sessionStorage.removeItem(key));}
+$('#edit-btn').addEventListener('click',()=>{if(editing()){clearRole();updateMode();notice('ออกจากโหมดทำงานแล้ว');}else {refreshActorOptions();$('#code-dialog').showModal();}});
 const themeButton=$('#theme-toggle');
 function syncThemeButton(){
   const dark=document.documentElement.dataset.theme!=='light';
@@ -384,10 +386,10 @@ themeButton.addEventListener('click',()=>{
 });
 window.addEventListener('storage',e=>{if(e.key==='bcl-display-theme'){document.documentElement.dataset.theme=e.newValue==='light'?'light':'dark';syncThemeButton();}});
 syncThemeButton();
-$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();await load(true);notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
+$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),actorId=String(f.get('actor_id')||'');if(role==='operator'&&!actorId){$('#code-message').textContent='กรุณาเลือกผู้ทำรายการ';return;}const username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.actorId=actorId;sessionStorage.setItem('workActorId',actorId);state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();await load(true);notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
 $('#refresh-btn').addEventListener('click',()=>load());
 ['#ticket-search','#ticket-date-from','#ticket-date-to'].forEach(selector=>$(selector).addEventListener('input',renderTickets));
-['#ticket-person-filter','#ticket-job-filter','#ticket-filter'].forEach(selector=>$(selector).addEventListener('change',renderTickets));
+['#ticket-person-filter','#ticket-job-filter','#ticket-filter','#ticket-date-basis','#ticket-completeness'].forEach(selector=>$(selector).addEventListener('change',renderTickets));
 $('#clear-ticket-filters').addEventListener('click',()=>{['#ticket-search','#ticket-person-filter','#ticket-job-filter','#ticket-date-from','#ticket-date-to'].forEach(selector=>$(selector).value='');$('#ticket-filter').value='all';renderTickets();});
 $('#print-report-btn').addEventListener('click',printReport);
 window.addEventListener('beforeprint',()=>{if(document.body.classList.contains('print-tickets'))populateReport(selectedTickets(),ticketFilters());});
@@ -414,7 +416,7 @@ $('#bom-results').addEventListener('click',e=>{
   if(!choice)return;
   $('#bom-search').value=choice.dataset.bomChoice;
   renderBomOptions();
-  $('#ticket-form [name="requested_qty"]').focus();
+  $('#ticket-form [data-document-number] input')?.focus();
 });
 $('#ticket-form [name="requested_qty"]').addEventListener('input',renderBomPreview);
 document.querySelectorAll('#ticket-form [name="source_mode"]').forEach(input=>input.addEventListener('change',setTicketMode));
@@ -452,7 +454,8 @@ $('#ticket-form').addEventListener('submit',async e=>{
     }
   }
   const args={p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_fg_code:formula?.fg_code||null,p_fg_name:formula?.fg_name||null,p_requested_qty:qty,p_bom_version:formula?state.bom.source_sha256:null,p_bom_materials:bomLines,p_stock_lines:state.stockLines};
-  const {error}=await state.db.rpc('create_withdrawal_ticket_as_supervisor',{p_username:state.username,p_code:state.code,...args});
+  const documentError=documentsError(readDocuments(e.target),qty,!manual);if(documentError){notice(documentError,true);return;}args.p_documents=readDocuments(e.target);
+  const {error}=await workAction('create_withdrawal_ticket_as_supervisor',args);
   if(error){
     if(isDuplicateTicketNumberError(error)){await load(true);showTicketNumberConflict();}
     else notice(`บันทึกไม่สำเร็จ: ${error.message}`,true);
@@ -478,7 +481,7 @@ document.addEventListener('change',async e=>{
 $('#job-form').addEventListener('submit',async e=>{e.preventDefault();const name=String(new FormData(e.target).get('name')).trim();if(name&&await mutate('add_job_as_supervisor',{p_name:name},'เพิ่มประเภทงานแล้ว'))e.target.reset();});
 document.addEventListener('change',async e=>{let fn,args;if(e.target.matches('[data-active]')){fn='set_staff_active_as_supervisor';args={p_staff_id:e.target.dataset.active,p_active:e.target.checked};}else if(e.target.matches('[data-job-active]')){fn='set_job_active_as_supervisor';args={p_job_id:e.target.dataset.jobActive,p_active:e.target.checked};}else if(e.target.matches('[data-skill]')){fn='set_skill_rating_as_supervisor';args={p_staff_id:e.target.dataset.skill,p_job_id:e.target.dataset.job,p_level:Number(e.target.value)};}else return;await mutate(fn,args,'บันทึกแล้ว');});
 
-async function boot(){if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){syncLabel('ยังไม่ตั้งค่าฐานข้อมูล');notice('ยังไม่ได้ตั้งค่าฐานข้อมูลกลาง',true);return;}state.db=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});if(state.role&&state.username&&state.code){const {data,error}=await state.db.rpc('verify_role_code',{p_role:state.role,p_username:state.username,p_code:state.code});if(!error&&data)state.verified=true;else clearRole();}updateMode();await load();setInterval(()=>{if(!document.hidden)load(true)},15000);}
+async function boot(){if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){syncLabel('ยังไม่ตั้งค่าฐานข้อมูล');notice('ยังไม่ได้ตั้งค่าฐานข้อมูลกลาง',true);return;}state.db=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});if(state.role&&state.username&&state.code){const {data,error}=await state.db.rpc('verify_role_code',{p_role:state.role,p_username:state.username,p_code:state.code});if(!error&&data&&!(state.role==='operator'&&!state.actorId))state.verified=true;else clearRole();}updateMode();await load();setInterval(()=>{if(!document.hidden)load(true)},15000);}
 boot();
 
 let pendingPicks=null;
@@ -488,11 +491,11 @@ function openPicks(ticket,closeStatus,supervisorEdit=false){
  $('#pick-message').textContent='';$('#pick-save').textContent=supervisorEdit?'บันทึกการแก้ไข':closeStatus?'บันทึกและปิดงาน':'บันทึกเบิกจริง';
  $('#pick-edit-reason-wrap').hidden=!supervisorEdit;$('#pick-edit-reason').required=supervisorEdit;$('#pick-edit-reason').value='';
  $('#pick-edit-hint').hidden=!supervisorEdit;
- $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label>รูปแบบจำนวน<select aria-label="รูปแบบรายการ ${i+1}" data-pick-mode="${i}"><option value="actual">จำนวนเบิกจริง</option><option value="short">จำนวนขาด</option><option value="over">จำนวนเกิน</option></select></label><label><span data-pick-label="${i}">จำนวนเบิกจริง</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${l.confirmed_at?Number(l.actual_qty):''}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>เหตุผลที่เบิกขาดหรือเกิน<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
+ $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label>รูปแบบจำนวน<select aria-label="รูปแบบรายการ ${i+1}" data-pick-mode="${i}"><option value="actual">จำนวนเบิกจริง</option><option value="short">จำนวนขาด</option><option value="over">จำนวนเกิน</option></select></label><label><span data-pick-label="${i}">จำนวนเบิกจริง</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${l.confirmed_at?Number(l.actual_qty):''}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>ประเภทเหตุผล<select data-pick-cause="${i}" aria-label="ประเภทเหตุผลรายการ ${i+1}"><option value="">เลือกเมื่อเบิกขาดหรือเกิน</option>${Object.entries(reasonLabels).map(([code,label])=>`<option value="${code}" ${l.reason_code===code?'selected':''}>${label}</option>`).join('')}</select></label><label>รายละเอียดเหตุผล<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
  updatePickShorts();$('#pick-dialog').showModal();
 }
 function readPickActual(i){return actualFromInput(pendingPicks.materials[i].required_qty,$('[data-pick-qty="'+i+'"]').value,$('[data-pick-mode="'+i+'"]').value);}
-function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const mode=$('[data-pick-mode="'+i+'"]'),input=$('[data-pick-qty="'+i+'"]'),label=({actual:'จำนวนเบิกจริง',short:'จำนวนขาด',over:'จำนวนเกิน'})[mode.value];$('[data-pick-label="'+i+'"]').textContent=label+' ('+l.unit+')';input.setAttribute('aria-label',label+'รายการ '+(i+1));const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);});}
+function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const mode=$('[data-pick-mode="'+i+'"]'),input=$('[data-pick-qty="'+i+'"]'),label=({actual:'จำนวนเบิกจริง',short:'จำนวนขาด',over:'จำนวนเกิน'})[mode.value];$('[data-pick-label="'+i+'"]').textContent=label+' ('+l.unit+')';input.setAttribute('aria-label',label+'รายการ '+(i+1));const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);$('[data-pick-cause="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);});}
 $('#pick-lines').addEventListener('input',updatePickShorts);
 $('#pick-lines').addEventListener('change',e=>{
   const mode=e.target.closest('[data-pick-mode]');
@@ -502,7 +505,7 @@ $('#pick-lines').addEventListener('change',e=>{
 $('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pick-full]');if(b){const i=Number(b.dataset.pickFull);$('[data-pick-mode="'+i+'"]').value='actual';$('[data-pick-mode="'+i+'"]').dataset.previousMode='actual';$('[data-pick-qty="'+i+'"]').value=pendingPicks.materials[i].required_qty;updatePickShorts();}});
 $('#pick-form').addEventListener('submit',async e=>{
  e.preventDefault();if(!pendingPicks||!(pendingPicks.supervisorEdit?supervisor():operator()))return;
- const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:readPickActual(i),short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
+ const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:readPickActual(i),reason_code:$('[data-pick-cause="'+i+'"]').value,short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
  const error=pickError(p.materials,picks,p.supervisorEdit?null:p.closeStatus);if(error){$('#pick-message').textContent=error;return;}
  $('#pick-save').disabled=true;
  const args={p_ticket_id:p.id,p_expected_materials:p.materials,p_expected_status:p.status,p_picks:picks,...(p.supervisorEdit?{p_edit_reason:$('#pick-edit-reason').value.trim()}:{p_close_status:p.closeStatus})};
@@ -512,6 +515,58 @@ $('#staff-edit-form').addEventListener('submit',async e=>{e.preventDefault();if(
 $('#dashboard-period').addEventListener('change',renderDashboard);
 $('#dashboard-job').addEventListener('change',renderDashboard);
 ['#dashboard-from','#dashboard-to'].forEach(s=>$(s).addEventListener('change',()=>{$('#dashboard-period').value='custom';renderDashboard();}));
-$('#dashboard-reset').addEventListener('click',()=>{$('#dashboard-period').value='all';$('#dashboard-job').value='';renderDashboard();});
+$('#dashboard-reset').addEventListener('click',()=>{$('#dashboard-period').value='all';$('#dashboard-job').value='';$('#dashboard-date-basis').value='ended_at';renderDashboard();});
 
 $('#ticket-edit-form [name="ticket_no"]').addEventListener('input',e=>updateDocumentCount(e.target));
+
+function dateBasisLabel(basis){return {created_at:'วันที่สร้างงาน',started_at:'วันที่เริ่มงาน',ended_at:'วันที่จบงาน'}[basis]||'วันที่สร้างงาน';}
+async function workAction(action,args){
+  return state.db.rpc('perform_work_action',{p_username:state.username,p_code:state.code,p_role:state.role,p_actor_id:state.role==='operator'?state.actorId||null:null,p_action:action,p_args:args});
+}
+function refreshActorOptions(){
+  setSelectOptions($('#actor-select'),'<option value="">เลือกชื่อผู้ทำรายการ</option>'+state.people.filter(p=>p.active).map(p=>`<option value="${esc(p.id)}">${esc(p.display_name)}</option>`).join(''));
+  const operatorRole=$('#role-select').value==='operator';$('#actor-field').hidden=!operatorRole;$('#actor-select').required=operatorRole;
+}
+$('#role-select').addEventListener('change',refreshActorOptions);
+function readDocuments(form){return [...form.querySelectorAll('[data-document-number]')].map(row=>({number:row.dataset.documentNumber,quantity:row.querySelector('input')?(row.querySelector('input').value===''?null:Number(row.querySelector('input').value)):null}));}
+function renderDocuments(form,initial=null){
+  const container=form.querySelector('[data-document-rows]');if(!container)return;
+  const hasFg=form.dataset.hasFg==='true',refs=ticketReferences({ticket_no:form.elements.ticket_no.value,fg_code:hasFg?'selected':null});
+  const previous=initial||readDocuments(form),map=new Map(previous.map(row=>[row.number.toUpperCase(),row.quantity]));
+  container.innerHTML=refs.map((number,i)=>`<div class="document-row" data-document-number="${esc(number)}"><strong>${esc(number)}</strong>${hasFg?`<label>จำนวนผลิตใบที่ ${i+1} (FG)<input type="number" aria-label="จำนวนผลิตใบที่ ${i+1}" min="0.001" max="1000000" step="0.001" required value="${map.get(number.toUpperCase())??''}"></label>`:'<span>ใช้รายการวัสดุรวมของงาน</span>'}</div>`).join('');
+  form.elements.requested_qty.readOnly=hasFg;
+  updateDocumentTotal(form);
+}
+function updateDocumentTotal(form){
+  if(form.dataset.hasFg!=='true')return;
+  const rows=readDocuments(form),sum=rows.reduce((s,r)=>s+Number(r.quantity||0),0);
+  form.elements.requested_qty.value=sum>0?Math.round(sum*1000)/1000:'';
+  if(form.id==='ticket-form')renderBomPreview();
+}
+for(const id of ['ticket-form','ticket-edit-form'])$('#'+id).addEventListener('input',e=>{if(e.target.closest('[data-document-number]'))updateDocumentTotal(e.currentTarget);});
+function documentSummary(ticket){
+  const rows=ticket.documents||[];
+  if(!rows.length||!ticket.fg_code)return '';
+  return `<div class="document-summary">${rows.map(r=>`<span><strong>${esc(r.number)}</strong>: ${r.quantity===null?'ยังไม่ระบุจำนวนผลิตรายใบ':qtyText(r.quantity)+' FG'}</span>`).join('')}</div>`;
+}
+function renderAttention(){
+  const all=state.tickets;
+  const items=[['queued','รอเริ่ม',all.filter(t=>t.status==='queued').length,'all'],['active','กำลังทำ',all.filter(t=>t.status==='active').length,'all'],['paused','พัก/รอ',all.filter(t=>t.status==='paused').length,'all'],['partial','เบิกไม่ครบ',all.filter(t=>t.status==='partial').length,'all'],['all','ยอดเบิกจริงไม่ครบ',all.filter(t=>pickCompleteness(t).total&&!pickCompleteness(t).complete).length,'incomplete'],['all','มีขาด/เกิน',all.filter(t=>(t.materials||[]).some(l=>l.confirmed_at&&l.actual_qty!==Number(l.required_qty))).length,'variance']];
+  $('#attention-list').innerHTML='<p>งานที่ต้องจัดการ · ทุกวันที่</p>'+items.map(([status,label,count,completeness])=>`<button class="attention-card" data-attention-status="${status}" data-attention-completeness="${completeness}" type="button"><span>${label}</span><strong>${count}</strong><small>งาน · เปิดรายการ →</small></button>`).join('');
+}
+document.addEventListener('click',e=>{
+  const attention=e.target.closest('[data-attention-status]');
+  const metric=e.target.closest('[data-metric-status]');if(!attention&&!metric)return;
+  $('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-job-filter').value=attention?'':$('#dashboard-job').value;
+  $('#ticket-date-basis').value=attention?'created_at':$('#dashboard-date-basis').value;
+  $('#ticket-date-from').value=attention?'':$('#dashboard-from').value;$('#ticket-date-to').value=attention?'':$('#dashboard-to').value;
+  $('#ticket-filter').value=attention?attention.dataset.attentionStatus:metric.dataset.metricStatus;
+  $('#ticket-completeness').value=attention?attention.dataset.attentionCompleteness:'all';renderTickets();showView('tickets');
+});
+$('#dashboard-date-basis').addEventListener('change',renderDashboard);
+function renderStandards(){
+  const form=$('#standard-form');setSelectOptions(form.elements.job_id,state.jobs.filter(j=>j.active).map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join(''));
+  $('#standards-list').innerHTML=state.standards.length?state.standards.map(s=>`<div class="standard-row"><strong>${esc(jobFor(s.job_type_id))} · ${esc(s.fg_code||'งานไม่มีสูตร')}</strong><span>เตรียม ${qtyText(s.setup_minutes)} นาที + ${qtyText(s.minutes_per_line)} นาที/รายการ + ${qtyText(s.minutes_per_1000_fg)} นาที/1,000 FG</span><button type="button" class="text-btn" data-edit-standard="${esc(s.job_type_id)}" data-standard-fg="${esc(s.fg_code)}">แก้ไข</button></div>`).join(''):empty('ยังไม่มีเวลามาตรฐาน จึงยังไม่คำนวณคะแนนความเร็ว');
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-edit-standard]');if(!b)return;const s=state.standards.find(s=>s.job_type_id===b.dataset.editStandard&&s.fg_code===b.dataset.standardFg),f=$('#standard-form');f.elements.job_id.value=s.job_type_id;f.elements.fg_code.value=s.fg_code;f.elements.setup.value=s.setup_minutes;f.elements.line.value=s.minutes_per_line;f.elements.fg.value=s.minutes_per_1000_fg;f.elements.setup.focus();});
+$('#standard-form').addEventListener('submit',async e=>{e.preventDefault();if(!supervisor())return;const f=e.target,button=f.querySelector('[type=submit]'),values=['setup','line','fg'].map(key=>Number(f.elements[key].value));if(values.some(v=>!Number.isFinite(v)||v<0)||values.reduce((a,b)=>a+b,0)<=0){$('#standard-message').textContent='กำหนดเวลามาตรฐานอย่างน้อยหนึ่งช่องมากกว่า 0';return;}button.disabled=true;try{await mutate('set_work_standard_as_supervisor',{p_job_id:f.elements.job_id.value,p_fg_code:f.elements.fg_code.value.trim(),p_setup:values[0],p_line:values[1],p_fg:values[2]},'บันทึกเวลามาตรฐานแล้ว','#standard-message');}finally{button.disabled=false;}});

@@ -30,7 +30,7 @@ test('person performance excludes open and cancelled jobs from completion rate',
     { assignee_id: 'b', status: 'done' },
   ];
   assert.deepEqual(personPerformance('a', tickets), {
-    total: 5, done: 2, partial: 1, open: 1, completionRate: 67, medianMinutes: 120,
+    total: 5, done: 2, partial: 1, open: 1, completionRate: 67, medianMinutes: 60,
   });
   assert.deepEqual(personPerformance('b', tickets), {
     total: 1, done: 1, partial: 0, open: 0, completionRate: 100, medianMinutes: null,

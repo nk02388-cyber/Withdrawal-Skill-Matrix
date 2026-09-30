@@ -16,12 +16,18 @@ export function filterTickets(tickets, filters) {
   const to = filters.dateTo || '';
   if (from && to && from > to) return [];
   return tickets.filter(ticket => {
-    const date = bangkokDate(ticket.created_at);
+    const basis=['created_at','started_at','ended_at'].includes(filters.dateBasis)?filters.dateBasis:'created_at';
+    const date = bangkokDate(ticket[basis]);
+    const picks=pickCompleteness(ticket);
+    const completeness=filters.completeness||'all';
     return (!query || String(ticket.ticket_no || '').toLocaleLowerCase().includes(query))
       && (!filters.assigneeId || ticket.assignee_id === filters.assigneeId)
       && (!filters.jobId || ticket.job_type_id === filters.jobId)
       && (!filters.status || ticket.status === filters.status)
+      && (completeness==='all'||completeness==='complete'&&picks.complete||completeness==='incomplete'&&picks.total>0&&!picks.complete||completeness==='variance'&&(ticket.materials||[]).some(l=>l.confirmed_at&&l.actual_qty!==Number(l.required_qty)))
+      && (!(from||to)||!!date)
       && (!from || date >= from)
       && (!to || date <= to);
   });
 }
+import {pickCompleteness} from './operations.mjs';

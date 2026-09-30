@@ -1,4 +1,4 @@
-import { workMinutes } from './work-duration.mjs';
+import { workBreakdown } from './operations.mjs';
 // This is a work-history indicator, not a supervisor's competency assessment.
 export function automaticSkill(completedCount) {
   if (completedCount >= 12) return 4;
@@ -24,7 +24,7 @@ export function personPerformance(personId, tickets) {
   const done = own.filter(ticket => ticket.status === 'done');
   const partial = own.filter(ticket => ticket.status === 'partial');
   const closed = done.length + partial.length;
-  const durations = done.map(ticket => workMinutes(ticket.started_at,ticket.ended_at)).filter(value => value !== null).sort((a, b) => a - b);
+  const durations = done.map(ticket => workBreakdown(ticket)?.activeMinutes??null).filter(value => value !== null).sort((a, b) => a - b);
   const mid = Math.floor(durations.length / 2);
   const medianMinutes = durations.length ? (durations.length % 2 ? durations[mid] : (durations[mid - 1] + durations[mid]) / 2) : null;
   return {
