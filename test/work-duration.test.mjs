@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {workMinutes,workDurationText} from '../work-duration.mjs';import {personPerformance} from '../skill-metrics.mjs';
+const th=t=>'2026-09-30T'+t+':00+07:00';
+test('subtract lunch from the user example: 11:15 to 13:30 is 75 minutes',()=>{assert.equal(workMinutes(th('11:15'),th('13:30')),75);assert.equal(workDurationText(th('11:15'),th('13:30')),'1 ชม. 15 นาที');});
+test('subtract only overlapping lunch minutes including exact boundaries',()=>{for(const [s,e,n] of [['11:30','12:30',30],['12:30','13:30',30],['12:10','12:50',0],['11:00','12:00',60],['13:00','14:00',60],['12:00','13:00',0],['11:59','13:01',2],['09:00','11:00',120]])assert.equal(workMinutes(th(s),th(e)),n);});
+test('multi-day and leap-day jobs subtract each daily lunch',()=>{assert.equal(workMinutes('2026-09-30T11:00:00+07:00','2026-10-01T14:00:00+07:00'),1500);assert.equal(workMinutes('2028-02-28T13:00:00+07:00','2028-03-01T12:00:00+07:00'),2760);});
+test('lunch uses Bangkok time even when timestamps use UTC',()=>{assert.equal(workMinutes('2026-09-30T04:15:00Z','2026-09-30T06:30:00Z'),75);assert.equal(workMinutes('2026-09-29T18:00:00Z','2026-09-29T19:00:00Z'),60);});
+test('invalid, reversed and missing times are excluded and zero remains zero',()=>{for(const [s,e] of [[null,th('13:00')],['bad',th('13:00')],[th('13:00'),th('11:00')]])assert.equal(workMinutes(s,e),null);assert.equal(workMinutes(th('11:00'),th('11:00')),0);});
+test('performance median uses the same lunch-adjusted duration',()=>{assert.equal(personPerformance('a',[{assignee_id:'a',status:'done',started_at:th('11:15'),ended_at:th('13:30')}]).medianMinutes,75);});
