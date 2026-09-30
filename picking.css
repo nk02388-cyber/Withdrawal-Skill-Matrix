@@ -27,3 +27,5 @@
 @media(min-width:851px){.rail .brand + .nav{margin-top:32px}}
 
 .ticket-actions [data-action="delete"]{color:var(--red);background:var(--surface)}
+
+.pick-quantity-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick-quantity-fields input{max-width:none}#pick-edit-reason-wrap[hidden],#pick-edit-hint[hidden]{display:none}#staff-edit-message{color:var(--red)}@media(max-width:560px){.pick-quantity-fields{grid-template-columns:1fr}}
