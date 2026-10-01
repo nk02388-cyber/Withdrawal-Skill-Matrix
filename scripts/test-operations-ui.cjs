@@ -5,6 +5,7 @@ const person='11111111-1111-4111-8111-111111111111',job='22222222-2222-4222-8222
 let trashPurged=false;const management={settings:{start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[],exceptionOwnerName:'สองนคร กรียินดี',exceptionOwnerId:'11111111-1111-4111-8111-111111111111'},cases:[]};
 const data={people:[{id:person,display_name:'ผู้ทำรายการทดสอบ',active:true}],jobs:[{id:job,name:'เบิกทดสอบ',active:true}],skills:[],standards:[],tickets:[{id:'33333333-3333-4333-8333-333333333333',ticket_no:'TEST-001,TEST-002',job_type_id:job,assignee_id:person,status:'done',fg_code:'FG-TEST',fg_name:'สูตรทดสอบ',requested_qty:3000,bom_version:'a'.repeat(64),created_at:'2026-09-29T08:00:00+07:00',started_at:'2026-09-30T11:00:00+07:00',ended_at:'2026-09-30T14:00:00+07:00',pause_intervals:[{start:'2026-09-30T11:30:00+07:00',end:'2026-09-30T13:30:00+07:00'}],documents:[{number:'TEST-001',quantity:null},{number:'TEST-002',quantity:null}],priority:'normal',planned_date:null,due_at:null,materials:[{...one,actual_qty:2990,confirmed_at:'2026-09-30T07:00:00Z',reason_code:'stock_shortage',short_reason:'fixture'}]}]};
 data.tickets.push({...data.tickets[0],id:'55555555-5555-4555-8555-555555555555',ticket_no:'TEST-PLAN',status:'queued',started_at:null,ended_at:null,materials:[],documents:[],fg_code:null});
+if(process.env.QA_SUPERVISOR_WORK==='1')Object.assign(data.tickets[0],{status:'queued',started_at:null,ended_at:null,materials:[one]});
 if(process.env.QA_FOLLOWUP==='1')data.tickets[0].status='partial';
 if(process.env.QA_AUTOPICKS==='1')Object.assign(data.tickets[0],{status:'active',ended_at:null,materials:[{...one,required_qty:49.92},{...one,pk_code:'QA-2',required_qty:2.88}]});
 const server=http.createServer((req,res)=>{
@@ -19,7 +20,8 @@ const server=http.createServer((req,res)=>{
   else if(name==='get_withdrawal_stock_catalog')response={snapshot_id:1,report_date:'fixture',snapshot_saved_at:new Date().toISOString(),items:[]};
   else if(name==='perform_work_action'){
    const args=a.p_args,t=data.tickets[0];
-   if(a.p_action==='confirm_ticket_picks_as_operator'){t.materials=t.materials.map((l,i)=>({...l,...args.p_picks[i],confirmed_at:new Date().toISOString()}));if(args.p_close_status){t.status=args.p_close_status;t.ended_at=new Date().toISOString();}console.log('Autopicks saved',JSON.stringify({status:t.status,picks:args.p_picks}));}
+   if(a.p_action==='start_ticket_as_supervisor'){t.status='active';t.started_at=new Date().toISOString();}
+   if(a.p_action==='confirm_ticket_picks_as_operator'||a.p_action==='confirm_ticket_picks_as_supervisor'){t.materials=t.materials.map((l,i)=>({...l,...args.p_picks[i],confirmed_at:new Date().toISOString()}));if(args.p_close_status){t.status=args.p_close_status;t.ended_at=new Date().toISOString();}console.log('Autopicks saved',JSON.stringify({status:t.status,picks:args.p_picks}));}
    if(a.p_action==='purge_ticket_as_supervisor')trashPurged=true;
    if(a.p_action==='edit_ticket_with_times_as_supervisor'){t.documents=args.p_documents;t.requested_qty=args.p_requested_qty;t.materials=t.materials.map(l=>({...l,required_qty:t.requested_qty}));}
    if(a.p_action==='edit_ticket_picks_as_supervisor'){t.materials=t.materials.map((l,i)=>({...l,...args.p_picks[i],confirmed_at:new Date().toISOString()}));t.status=t.materials.some(l=>l.actual_qty<l.required_qty)?'partial':'done';}

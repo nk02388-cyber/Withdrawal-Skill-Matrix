@@ -227,6 +227,9 @@ function ticketHtml(t){
   }
   if(supervisor()&&t.deleted_at){actions+=button('restore','กู้คืน')+button('purge','ลบถาวร');}
   if(supervisor()&&!t.deleted_at){
+    if(t.status==='queued')actions+=button('start','เริ่มงาน',true);
+    if(t.status==='active')actions+=button('finish','จบงาน',true);
+    if(t.status==='paused')actions+=button('resume','ทำงานต่อ',true);
     actions+=button('edit','แก้ไข')+button('delete','ลบ');
     if(['active','paused','done','partial'].includes(t.status)&&t.materials?.length)actions+=button('edit-picks','แก้ไขเบิกจริง');
     if(['queued','active','paused'].includes(t.status))actions+=button('cancel','ยกเลิก');
@@ -343,14 +346,15 @@ document.addEventListener('click',async e=>{
     const kind=action.dataset.action,ticket=[...state.tickets,...state.deletedTickets].find(t=>t.id===action.dataset.id);
     if(!ticket)return;
     if(kind==='purge'&&supervisor()){openPurge(ticket);return;}
-    if(operator()&&['picks','finish','partial'].includes(kind)&&ticket.materials?.length){openPicks(ticket,kind==='finish'?'done':kind==='partial'?'partial':null);return;}
+    if((operator()||supervisor())&&['picks','finish','partial'].includes(kind)&&ticket.materials?.length){openPicks(ticket,kind==='finish'?'done':kind==='partial'?'partial':null);return;}
     if(kind==='edit-picks'&&supervisor()){openPicks(ticket,null,true);return;}
     if(kind==='history'){await openHistory(ticket);return;}
     if(kind==='edit'&&supervisor()){openEdit(ticket);return;}
+    if(kind==='resume'&&supervisor()){action.disabled=true;try{await mutate('resume_ticket_as_supervisor',{p_ticket_id:ticket.id,p_reason:'หัวหน้าสั่งทำงานต่อ'},'ทำงานต่อแล้ว');}finally{action.disabled=false;}return;}
     if(kind in eventConfig){if((['cancel','delete','restore'].includes(kind)&&supervisor())||(!['cancel','delete','restore'].includes(kind)&&operator()))openEvent(kind,ticket);return;}
-    if(['start','finish'].includes(kind)&&operator()){
+    if(['start','finish'].includes(kind)&&(operator()||supervisor())){
       action.disabled=true;
-      await mutate(kind==='start'?'start_ticket_as_operator':'finish_ticket_as_operator',{p_ticket_id:ticket.id},kind==='start'?'เริ่มงานแล้ว':'จบงานแล้ว');
+      await mutate((kind==='start'?'start_ticket_as_':'finish_ticket_as_')+(supervisor()?'supervisor':'operator'),{p_ticket_id:ticket.id},kind==='start'?'เริ่มงานแล้ว':'จบงานแล้ว');
       action.disabled=false;
     }
     return;
@@ -502,7 +506,7 @@ async function boot(){if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){syncLabel('�
 
 let pendingPicks=null;
 function openPicks(ticket,closeStatus,supervisorEdit=false){
- pendingPicks={id:ticket.id,materials:structuredClone(ticket.materials),status:ticket.status,closeStatus,supervisorEdit};
+ pendingPicks={id:ticket.id,materials:structuredClone(ticket.materials),status:ticket.status,closeStatus,supervisorEdit,supervisorAction:supervisor()&&!supervisorEdit};
  $('#pick-title').textContent=(supervisorEdit?'แก้ไขเบิกจริง':closeStatus==='done'?'ยืนยันและจบงาน':closeStatus==='partial'?'ยืนยันและปิดเบิกไม่ครบ':'บันทึกเบิกจริง')+' · '+ticket.ticket_no;
  $('#pick-message').textContent='';$('#pick-save').textContent=supervisorEdit?'บันทึกการแก้ไข':closeStatus?'บันทึกและปิดงาน':'บันทึกเบิกจริง';
  $('#pick-edit-reason-wrap').hidden=!supervisorEdit;$('#pick-edit-reason').required=supervisorEdit;$('#pick-edit-reason').value='';
@@ -527,13 +531,13 @@ $('#pick-lines').addEventListener('change',e=>{
 });
 $('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pick-full]');if(b){const i=Number(b.dataset.pickFull);$('[data-pick-mode="'+i+'"]').value='actual';$('[data-pick-mode="'+i+'"]').dataset.previousMode='actual';$('[data-pick-qty="'+i+'"]').value=pendingPicks.materials[i].required_qty;updatePickShorts();}});
 $('#pick-form').addEventListener('submit',async e=>{
- e.preventDefault();if(!pendingPicks||!(pendingPicks.supervisorEdit?supervisor():operator()))return;
+ e.preventDefault();if(!pendingPicks||!((pendingPicks.supervisorEdit||pendingPicks.supervisorAction)?supervisor():operator()))return;
  const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:readPickActual(i),reason_code:$('[data-pick-cause="'+i+'"]').value,short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
  const closeStatus=p.supervisorEdit?null:automaticPickCloseStatus(p.materials,picks,p.closeStatus);
  const error=pickError(p.materials,picks,closeStatus);if(error){$('#pick-message').textContent=error;return;}
  $('#pick-save').disabled=true;
  const args={p_ticket_id:p.id,p_expected_materials:p.materials,p_expected_status:p.status,p_picks:picks,...(p.supervisorEdit?{p_edit_reason:$('#pick-edit-reason').value.trim()}:{p_close_status:closeStatus})};
- try{if(await mutate(p.supervisorEdit?'edit_ticket_picks_as_supervisor':'confirm_ticket_picks_as_operator',args,p.supervisorEdit?'แก้ไขเบิกจริงและบันทึกประวัติแล้ว':p.closeStatus?'บันทึกเบิกจริงและปิดงานแล้ว':'บันทึกเบิกจริงแล้ว','#pick-message'))$('#pick-dialog').close();}finally{$('#pick-save').disabled=false;}
+ try{if(await mutate(p.supervisorEdit?'edit_ticket_picks_as_supervisor':p.supervisorAction?'confirm_ticket_picks_as_supervisor':'confirm_ticket_picks_as_operator',args,p.supervisorEdit?'แก้ไขเบิกจริงและบันทึกประวัติแล้ว':p.closeStatus?'บันทึกเบิกจริงและปิดงานแล้ว':'บันทึกเบิกจริงแล้ว','#pick-message'))$('#pick-dialog').close();}finally{$('#pick-save').disabled=false;}
 });
 $('#staff-edit-form').addEventListener('submit',async e=>{e.preventDefault();if(!supervisor())return;const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;try{if(await mutate('edit_staff_profile_as_supervisor',{p_staff_id:form.elements.staff_id.value,p_name:form.elements.name.value.trim(),p_position:form.elements.position.value.trim(),p_expected:editingStaffSnapshot},'แก้ไขข้อมูลพนักงานแล้ว','#staff-edit-message'))$('#staff-edit-dialog').close();}finally{button.disabled=false;}});
 $('#dashboard-period').addEventListener('change',renderDashboard);
