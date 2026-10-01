@@ -1,4 +1,4 @@
-import {significantShortage,significantVariance} from './pick-tolerance.mjs?v=2';
+import {significantShortage,significantVariance,requiresPickReason} from './pick-tolerance.mjs?v=3';
 export function pickError(materials,picks,closeStatus=null) {
   if(!materials.length || picks.length!==materials.length) return 'กรุณายืนยันให้ครบทุกรายการ';
   let shortages=0;
@@ -8,7 +8,7 @@ export function pickError(materials,picks,closeStatus=null) {
     const reason=String(p.short_reason||'').trim();
     if(reason.length>1000) return `รายการ ${i+1}: เหตุผลยาวเกิน 1,000 ตัวอักษร`;
     if(significantShortage(required,actual))shortages++;
-    if(significantVariance(required,actual)&&!reason)return `รายการ ${i+1}: กรุณาระบุเหตุผลที่เบิกขาดหรือเกิน`;
+    if(requiresPickReason(required,actual)&&!reason)return `รายการ ${i+1}: กรุณาระบุเหตุผลที่เบิกขาดหรือเกิน`;
   }
   if(closeStatus==='done'&&shortages) return 'มีรายการขาด กรุณาเลือกปิดเป็นเบิกไม่ครบ';
   if(closeStatus==='partial'&&!shortages) return 'ไม่มีรายการขาด กรุณาเลือกจบงาน';

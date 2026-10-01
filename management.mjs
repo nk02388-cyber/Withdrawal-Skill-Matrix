@@ -1,4 +1,4 @@
-import {fractionalVariance} from './pick-tolerance.mjs?v=2';
+import {fractionalVariance} from './pick-tolerance.mjs?v=3';
 export const defaultSettings={start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[],exceptionOwnerName:'สองนคร กรียินดี'};
 export function settingsError(s){
  const times=['start','end','lunchStart','lunchEnd'].map(k=>s[k]);

@@ -3,3 +3,5 @@ export function fractionalVariance(required,actual){const d=Math.abs(pickDelta(r
 export function significantShortage(required,actual){return pickDelta(required,actual)<-1;}
 
 export function significantVariance(required,actual){return Math.abs(pickDelta(required,actual))>1;}
+
+export function requiresPickReason(required,actual){return Math.abs(pickDelta(required,actual))>=1;}

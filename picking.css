@@ -28,7 +28,7 @@
 
 .ticket-actions [data-action="delete"]{color:var(--red);background:var(--surface)}
 
-.pick-quantity-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.pick-quantity-fields input{max-width:none}#pick-edit-reason-wrap[hidden],#pick-edit-hint[hidden]{display:none}#staff-edit-message{color:var(--red)}@media(max-width:560px){.pick-quantity-fields{grid-template-columns:1fr}}
+.pick-quantity-fields{display:grid;grid-template-columns:1fr;gap:12px}.pick-quantity-fields input{max-width:none}#pick-edit-reason-wrap[hidden],#pick-edit-hint[hidden]{display:none}#staff-edit-message{color:var(--red)}@media(max-width:560px){.pick-quantity-fields{grid-template-columns:1fr}}
 .ticket-variance{margin-top:14px}.ticket-variance h5{font-size:13px;color:var(--amber);margin:0 0 8px}.ticket-variance .bom-table{min-width:480px}.ticket-variance .bom-table-wrap{max-width:100%}.ticket-variance .bom-table td{vertical-align:top}
 /* Explicit labels and color strips for confirmed quantity differences. */
 .bom-table tr.pick-short{background:#351f24}

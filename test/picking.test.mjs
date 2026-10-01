@@ -24,3 +24,9 @@ test('dashboard presets use Thai calendar dates and Monday start including year 
 });
 
 test('over picks require reasons and can finish, deficits convert from a direct amount',()=>{const m=[{required_qty:10}];assert.equal(pickError(m,[{actual_qty:12,short_reason:'เบิกเผื่อ'}],'done'),'');assert.ok(pickError(m,[{actual_qty:12}],'done'));assert.ok(pickError(m,[{actual_qty:1000000001,short_reason:'เกิน'}]));assert.equal(actualFromInput(10,2,'short'),8);assert.equal(actualFromInput(10,2,'over'),12);assert.equal(actualFromInput(.8888,.0001,'over'),.8889);assert.ok(Number.isNaN(actualFromInput(10,.12345)));assert.equal(actualFromInput(10,''),null);assert.ok(pickError(m,[{actual_qty:actualFromInput(10,11,'short'),short_reason:'ขาด'}]));assert.equal(pickVarianceText(10,12,'ชิ้น'),'เกิน 2 ชิ้น');assert.equal(pickVarianceText(10,8,'ชิ้น'),'ขาด 2 ชิ้น');assert.equal(pickVarianceText(10,10,'ชิ้น'),'ครบตามใบเบิก');assert.deepEqual(confirmedPickSummary([{materials:[{required_qty:10,actual_qty:12,confirmed_at:'now'}]}]),{confirmed:1,picked:1,short:0,over:1,unknown:0});});
+
+test('reasons are mandatory at exactly one unit in both directions',()=>{
+ const m=[{required_qty:10}];
+ for(const actual_qty of [9,11,8.9999,11.0001]){assert.ok(pickError(m,[{actual_qty}]));assert.equal(pickError(m,[{actual_qty,short_reason:'ตรวจสอบแล้ว'}]),'');}
+ for(const actual_qty of [9.0001,10.9999])assert.equal(pickError(m,[{actual_qty}]),'');
+});

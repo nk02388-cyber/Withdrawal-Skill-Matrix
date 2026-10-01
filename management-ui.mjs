@@ -1,4 +1,4 @@
-import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder} from './management.mjs?v=4';
+import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder} from './management.mjs?v=5';
 import {configureWorkTime,workBreakdown,minutesText,operationalPerformance,pickCompleteness,reasonLabels} from './operations.mjs?v=2';
 import {totalDocuments,ticketDocumentCount} from './withdrawal-documents.mjs';
 import {fromBangkokInput,toBangkokInput,formatBangkokDateTime} from './ticket-time.mjs?v=2';

@@ -1,8 +1,8 @@
-import {followupComplete} from './management.mjs?v=4';
+import {followupComplete} from './management.mjs?v=5';
 import {installManagement} from './management-ui.mjs?v=2';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=2';
 import { prepareStaffPhoto } from './staff-photo.mjs';
-import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=6';
+import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=7';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
 import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
 import { presetDates } from './dashboard-filters.mjs';
@@ -511,11 +511,11 @@ function openPicks(ticket,closeStatus,supervisorEdit=false){
  $('#pick-message').textContent='';$('#pick-save').textContent=supervisorEdit?'บันทึกการแก้ไข':closeStatus?'บันทึกและปิดงาน':'บันทึกเบิกจริง';
  $('#pick-edit-reason-wrap').hidden=!supervisorEdit;$('#pick-edit-reason').required=supervisorEdit;$('#pick-edit-reason').value='';
  $('#pick-edit-hint').hidden=!(supervisorEdit&&['done','partial'].includes(ticket.status));
- $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label>รูปแบบจำนวน<select aria-label="รูปแบบรายการ ${i+1}" data-pick-mode="${i}"><option value="actual">จำนวนเบิกจริง</option><option value="short">จำนวนขาด</option><option value="over">จำนวนเกิน</option></select></label><label><span data-pick-label="${i}">จำนวนเบิกจริง</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${defaultPickActual(l)}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>ประเภทเหตุผล<select data-pick-cause="${i}" aria-label="ประเภทเหตุผลรายการ ${i+1}"><option value="">เลือกเมื่อเบิกขาดหรือเกิน</option>${Object.entries(reasonLabels).map(([code,label])=>`<option value="${code}" ${l.reason_code===code?'selected':''}>${label}</option>`).join('')}</select></label><label>รายละเอียดเหตุผล<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
+ $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label><span>จำนวนเบิกจริง (${esc(l.unit)})</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${defaultPickActual(l)}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>ประเภทเหตุผล<select data-pick-cause="${i}" aria-label="ประเภทเหตุผลรายการ ${i+1}"><option value="">เลือกเมื่อส่วนต่างตั้งแต่ 1 หน่วย</option>${Object.entries(reasonLabels).map(([code,label])=>`<option value="${code}" ${l.reason_code===code?'selected':''}>${label}</option>`).join('')}</select></label><label>รายละเอียดเหตุผล (บังคับเมื่อส่วนต่างตั้งแต่ 1 หน่วย)<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
  updatePickShorts();$('#pick-dialog').showModal();
 }
-function readPickActual(i){return actualFromInput(pendingPicks.materials[i].required_qty,$('[data-pick-qty="'+i+'"]').value,$('[data-pick-mode="'+i+'"]').value);}
-function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const mode=$('[data-pick-mode="'+i+'"]'),input=$('[data-pick-qty="'+i+'"]'),label=({actual:'จำนวนเบิกจริง',short:'จำนวนขาด',over:'จำนวนเกิน'})[mode.value];$('[data-pick-label="'+i+'"]').textContent=label+' ('+l.unit+')';input.setAttribute('aria-label',label+'รายการ '+(i+1));const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&Math.abs(Math.round((qty-Number(l.required_qty))*10000))>10000;$('[data-pick-cause="'+i+'"]').required=qty!==null&&Math.abs(Math.round((qty-Number(l.required_qty))*10000))>10000;});updatePickClosure();}
+function readPickActual(i){return actualFromInput(pendingPicks.materials[i].required_qty,$('[data-pick-qty="'+i+'"]').value);}
+function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&Math.abs(Math.round((qty-Number(l.required_qty))*10000))>=10000;$('[data-pick-cause="'+i+'"]').required=qty!==null&&Math.abs(Math.round((qty-Number(l.required_qty))*10000))>=10000;});updatePickClosure();}
 function updatePickClosure(){
  const p=pendingPicks,summary=$('#pick-close-summary');summary.hidden=!p?.closeStatus&&!(p?.supervisorEdit&&['done','partial'].includes(p.status));
  if(summary.hidden)return;
@@ -524,12 +524,8 @@ function updatePickClosure(){
  if(!p.supervisorEdit)$('#pick-save').textContent=status==='partial'?'บันทึกและปิดเป็นเบิกไม่ครบ':'บันทึกและจบงาน';
 }
 $('#pick-lines').addEventListener('input',updatePickShorts);
-$('#pick-lines').addEventListener('change',e=>{
-  const mode=e.target.closest('[data-pick-mode]');
-  if(mode){const i=Number(mode.dataset.pickMode),input=$('[data-pick-qty="'+i+'"]');input.value=convertPickMode(pendingPicks.materials[i].required_qty,input.value,mode.dataset.previousMode||'actual',mode.value);mode.dataset.previousMode=mode.value;}
-  updatePickShorts();
-});
-$('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pick-full]');if(b){const i=Number(b.dataset.pickFull);$('[data-pick-mode="'+i+'"]').value='actual';$('[data-pick-mode="'+i+'"]').dataset.previousMode='actual';$('[data-pick-qty="'+i+'"]').value=pendingPicks.materials[i].required_qty;updatePickShorts();}});
+$('#pick-lines').addEventListener('change',updatePickShorts);
+$('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pick-full]');if(b){const i=Number(b.dataset.pickFull);$('[data-pick-qty="'+i+'"]').value=pendingPicks.materials[i].required_qty;updatePickShorts();}});
 $('#pick-form').addEventListener('submit',async e=>{
  e.preventDefault();if(!pendingPicks||!((pendingPicks.supervisorEdit||pendingPicks.supervisorAction)?supervisor():operator()))return;
  const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:readPickActual(i),reason_code:$('[data-pick-cause="'+i+'"]').value,short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
