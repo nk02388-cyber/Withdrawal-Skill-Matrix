@@ -1,0 +1,3 @@
+.brand-caption .app-name{white-space:normal;font-size:15px;font-weight:700;line-height:1.35;letter-spacing:0;overflow-wrap:normal}
+.brand-caption:has(.app-name) small{margin-top:6px}
+@media(max-width:850px){.brand-caption .app-name{font-size:15px}.brand-caption:has(.app-name) small{margin-top:3px}}
