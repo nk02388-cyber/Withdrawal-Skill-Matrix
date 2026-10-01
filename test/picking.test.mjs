@@ -5,7 +5,7 @@ import {presetDates} from '../dashboard-filters.mjs';
 import {filterTickets} from '../ticket-report.mjs';
 test('picks require explicit quantities, valid bounds and a shortage reason',()=>{
   const materials=[{required_qty:10},{required_qty:0.8888}];
-  for(const value of [null,undefined,NaN,-1,11,0.12345])assert.ok(pickError(materials,[{actual_qty:value},{actual_qty:0.8888}]));
+  for(const value of [null,undefined,NaN,-1,12,0.12345])assert.ok(pickError(materials,[{actual_qty:value},{actual_qty:0.8888}]));
   assert.ok(pickError(materials,[{actual_qty:8},{actual_qty:0.8888}]));
   assert.equal(pickError(materials,[{actual_qty:0,short_reason:'ไม่มีสินค้า'},{actual_qty:0.8888}]),'');
   assert.ok(pickError(materials,[{actual_qty:8,short_reason:'ขาด'},{actual_qty:0.8888}],'done'));

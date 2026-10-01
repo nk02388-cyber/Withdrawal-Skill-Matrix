@@ -1,4 +1,4 @@
-import { workBreakdown } from './operations.mjs';
+import { workBreakdown } from './operations.mjs?v=2';
 // This is a work-history indicator, not a supervisor's competency assessment.
 export function automaticSkill(completedCount) {
   if (completedCount >= 12) return 4;

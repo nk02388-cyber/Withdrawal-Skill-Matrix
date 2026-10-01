@@ -1,4 +1,4 @@
-import {significantShortage} from './pick-tolerance.mjs';
+import {significantShortage,significantVariance} from './pick-tolerance.mjs?v=2';
 export function pickError(materials,picks,closeStatus=null) {
   if(!materials.length || picks.length!==materials.length) return 'กรุณายืนยันให้ครบทุกรายการ';
   let shortages=0;
@@ -8,7 +8,7 @@ export function pickError(materials,picks,closeStatus=null) {
     const reason=String(p.short_reason||'').trim();
     if(reason.length>1000) return `รายการ ${i+1}: เหตุผลยาวเกิน 1,000 ตัวอักษร`;
     if(significantShortage(required,actual))shortages++;
-    if(actual!==required&&!reason)return `รายการ ${i+1}: กรุณาระบุเหตุผลที่เบิกขาดหรือเกิน`;
+    if(significantVariance(required,actual)&&!reason)return `รายการ ${i+1}: กรุณาระบุเหตุผลที่เบิกขาดหรือเกิน`;
   }
   if(closeStatus==='done'&&shortages) return 'มีรายการขาด กรุณาเลือกปิดเป็นเบิกไม่ครบ';
   if(closeStatus==='partial'&&!shortages) return 'ไม่มีรายการขาด กรุณาเลือกจบงาน';
@@ -18,7 +18,7 @@ export function confirmedPickSummary(tickets){
   let confirmed=0,picked=0,short=0,over=0,unknown=0;
   for(const t of tickets) for(const l of t.materials||[]){
     if(!l.confirmed_at||typeof l.actual_qty!=='number'){unknown++;continue;}
-    confirmed++;if(l.actual_qty>0)picked++;if(l.actual_qty<Number(l.required_qty))short++;if(l.actual_qty>Number(l.required_qty))over++;
+    confirmed++;if(l.actual_qty>0)picked++;if(significantShortage(l.required_qty,l.actual_qty))short++;if(significantVariance(l.required_qty,l.actual_qty)&&l.actual_qty>Number(l.required_qty))over++;
   }
   return {confirmed,picked,short,over,unknown};
 }
@@ -29,7 +29,7 @@ export function actualFromInput(required,value,mode='actual'){
 }
 export function pickVarianceText(required,actual,unit,format=String){
  const delta=Math.round((Number(actual)-Number(required))*10000)/10000;
- return delta===0?'ครบตามใบเบิก':(delta<0?'ขาด ':'เกิน ')+format(Math.abs(delta))+' '+unit;
+ return delta===0?'ครบตามใบเบิก':Math.abs(delta)<=1?'เบิกครบ':(delta<0?'ขาด ':'เกิน ')+format(Math.abs(delta))+' '+unit;
 }
 export function convertPickMode(required,value,previous,next){
  if(value==='')return '';

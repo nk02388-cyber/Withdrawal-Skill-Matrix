@@ -1,5 +1,5 @@
-import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder} from './management.mjs?v=3';
-import {configureWorkTime,workBreakdown,minutesText,operationalPerformance,pickCompleteness,reasonLabels} from './operations.mjs';
+import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder} from './management.mjs?v=4';
+import {configureWorkTime,workBreakdown,minutesText,operationalPerformance,pickCompleteness,reasonLabels} from './operations.mjs?v=2';
 import {totalDocuments,ticketDocumentCount} from './withdrawal-documents.mjs';
 import {fromBangkokInput,toBangkokInput,formatBangkokDateTime} from './ticket-time.mjs?v=2';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));

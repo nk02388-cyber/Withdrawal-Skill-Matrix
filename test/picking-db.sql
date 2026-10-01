@@ -20,7 +20,7 @@ begin
   begin perform public.confirm_ticket_picks_as_operator('test-picking-transaction',code,id,t.materials,t.status,'[{"actual_qty":8},{"actual_qty":0.8888}]',null); exception when others then if sqlerrm like 'กรุณาระบุเหตุผล%' then blocked:=true; else raise; end if; end;
   if not blocked then raise exception 'FAIL shortage reason'; end if;
   blocked:=false;
-  begin perform public.confirm_ticket_picks_as_operator('test-picking-transaction',code,id,t.materials,t.status,'[{"actual_qty":11},{"actual_qty":0.8888}]',null); exception when others then if sqlerrm like 'กรุณาระบุเหตุผล%' then blocked:=true; else raise; end if; end;
+  begin perform public.confirm_ticket_picks_as_operator('test-picking-transaction',code,id,t.materials,t.status,'[{"actual_qty":12},{"actual_qty":0.8888}]',null); exception when others then if sqlerrm like 'กรุณาระบุเหตุผล%' then blocked:=true; else raise; end if; end;
   if not blocked then raise exception 'FAIL overpick'; end if;
   perform public.confirm_ticket_picks_as_operator('test-picking-transaction',code,id,t.materials,t.status,'[{"actual_qty":8,"short_reason":"สินค้าไม่พอ"},{"actual_qty":0.8888}]',null);
   blocked:=false;

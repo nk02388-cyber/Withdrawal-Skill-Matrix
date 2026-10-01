@@ -1,4 +1,4 @@
-import {fractionalVariance} from './pick-tolerance.mjs';
+import {fractionalVariance} from './pick-tolerance.mjs?v=2';
 export const defaultSettings={start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[],exceptionOwnerName:'สองนคร กรียินดี'};
 export function settingsError(s){
  const times=['start','end','lunchStart','lunchEnd'].map(k=>s[k]);
@@ -9,7 +9,7 @@ export function settingsError(s){
 }
 export function varianceRows(tickets,cases=[]){return tickets.filter(t=>!t.deleted_at&&t.status!=='cancelled').flatMap(t=>(t.materials||[]).flatMap((l,i)=>{
  if(!l.confirmed_at||!Number.isFinite(l.actual_qty)||!Number.isFinite(Number(l.required_qty)))return [];
- const delta=Math.round((l.actual_qty-Number(l.required_qty))*10000)/10000;if(!delta)return [];
+ const delta=Math.round((l.actual_qty-Number(l.required_qty))*10000)/10000;if(Math.abs(delta)<=1)return [];
  const fingerprint=JSON.stringify([l.pk_code,Number(l.required_qty),l.actual_qty,l.confirmed_at]);
  const saved=cases.find(c=>c.ticket_id===t.id&&c.line_index===i);
  return [{ticket:t,line:l,index:i,delta,fingerprint,case:saved,fractional:fractionalVariance(l.required_qty,l.actual_qty),status:fractionalVariance(l.required_qty,l.actual_qty)?'resolved':saved?.fingerprint===fingerprint?saved.status:'open',stale:!!saved&&saved.fingerprint!==fingerprint}];
@@ -23,5 +23,5 @@ export function followupComplete(ticket,cases=[]){
  const lines=ticket.materials||[];
  if(!lines.length||lines.some(l=>!l.confirmed_at||!Number.isFinite(l.actual_qty)||!Number.isFinite(Number(l.required_qty))))return false;
  const rows=varianceRows([ticket],cases);
- return rows.length>0&&rows.every(r=>r.status==='resolved');
+ return (rows.length>0||lines.some(l=>fractionalVariance(l.required_qty,l.actual_qty)))&&rows.every(r=>r.status==='resolved');
 }

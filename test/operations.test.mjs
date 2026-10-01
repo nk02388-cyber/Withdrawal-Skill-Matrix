@@ -37,7 +37,7 @@ test('standard comparison requires exact job/SKU, complete data and positive net
   assert.equal(operationalPerformance([work],[]).efficiency,null);
 });
 test('stock shortage and approved excess are separate from recorded picking errors',()=>{
-  const lines=['stock_shortage','approved_extra','picking_error',null].map(reason_code=>({required_qty:10,actual_qty:9,confirmed_at:'now',reason_code}));
+  const lines=['stock_shortage','approved_extra','picking_error',null].map(reason_code=>({required_qty:10,actual_qty:8,confirmed_at:'now',reason_code}));
   const quality=operationalPerformance([{status:'partial',materials:lines}],[]);
   assert.equal(quality.pickingErrors,1);assert.equal(quality.reviewNeeded,1);
 });

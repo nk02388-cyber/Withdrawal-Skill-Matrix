@@ -64,3 +64,9 @@ test('fully picked and unconfirmed tickets show no variance section',()=>{
     assert.doesNotMatch(html({status:'done',materials}),/ticket-variance/);
   }
 });
+
+test('differences up to one unit hide warnings and legacy shortage reasons',()=>{
+ const result=html({status:'partial',status_reason:'เบิกขาด 1 รายการ',materials:[line('SMALL_SHORT',9),line('SMALL_OVER',10.08)]});
+ assert.match(result,/เบิกครบ/);assert.match(result,/เบิกจริง 9 ชิ้น/);
+ assert.doesNotMatch(result,/ticket-variance|pick-short|pick-over|pick-variance-reason|เบิกขาด 1 รายการ|ขาด 1 ชิ้น|เกิน 0.08/);
+});

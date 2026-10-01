@@ -24,10 +24,10 @@ export function filterTickets(tickets, filters) {
       && (!filters.assigneeId || ticket.assignee_id === filters.assigneeId)
       && (!filters.jobId || ticket.job_type_id === filters.jobId)
       && (!filters.status || ticket.status === filters.status)
-      && (completeness==='all'||completeness==='complete'&&picks.complete||completeness==='incomplete'&&picks.total>0&&!picks.complete||completeness==='variance'&&(ticket.materials||[]).some(l=>l.confirmed_at&&l.actual_qty!==Number(l.required_qty)))
+      && (completeness==='all'||completeness==='complete'&&picks.complete||completeness==='incomplete'&&picks.total>0&&!picks.complete||completeness==='variance'&&(ticket.materials||[]).some(l=>l.confirmed_at&&Math.abs(Math.round((l.actual_qty-Number(l.required_qty))*10000))>10000))
       && (!(from||to)||!!date)
       && (!from || date >= from)
       && (!to || date <= to);
   });
 }
-import {pickCompleteness} from './operations.mjs';
+import {pickCompleteness} from './operations.mjs?v=2';

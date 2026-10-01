@@ -41,7 +41,7 @@ export function operationalPerformance(tickets,standards){
     if(!['done','partial'].includes(ticket.status))continue;
     const info=pickCompleteness(ticket);
     if(!info.complete)continue;complete++;
-    for(const line of ticket.materials||[]){if(line.actual_qty===Number(line.required_qty))continue;if(line.reason_code==='picking_error')pickingErrors++;if(!line.reason_code||line.reason_code==='other')reviewNeeded++;}
+    for(const line of ticket.materials||[]){if(Math.abs(Math.round((line.actual_qty-Number(line.required_qty))*10000))<=10000)continue;if(line.reason_code==='picking_error')pickingErrors++;if(!line.reason_code||line.reason_code==='other')reviewNeeded++;}
     const duration=workBreakdown(ticket),target=expectedMinutes(ticket,standards);
     if(ticket.status==='done'&&duration?.activeMinutes>0&&target>0){expected+=target;actual+=duration.activeMinutes;matched++;comparisons.push({ticket_no:ticket.ticket_no,target,actual:duration.activeMinutes});}
   }
