@@ -1,3 +1,4 @@
+import {followupComplete} from '../management.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -11,7 +12,7 @@ test('print report distinguishes net shift time and incomplete actual picking',(
   let result='';
   const node={set innerHTML(value){result=value;}};
   const render=runInNewContext(source.slice(source.indexOf('function populateReport('),source.indexOf('function printReport('))+';populateReport',{
-    $:()=>node,esc:v=>String(v??''),qtyText:v=>String(v),fmtReport:()=> 'วันทดสอบ',nameFor:()=> 'พนักงาน',jobFor:()=> 'Job',
+    state:{management:{cases:[]}},followupComplete,$:()=>node,esc:v=>String(v??''),qtyText:v=>String(v),fmtReport:()=> 'วันทดสอบ',nameFor:()=> 'พนักงาน',jobFor:()=> 'Job',
     statusLabels:{done:'เสร็จแล้ว'},reportFiltersText:()=> 'วันที่จบงาน',ticketDocumentCount,totalDocuments:list=>list.reduce((n,t)=>n+ticketDocumentCount(t),0),
     workBreakdown,minutesText,pickCompleteness,pickVarianceText,documentSummary:()=> 'ใบ A 1,000 FG · ใบ B 2,000 FG',
   });
@@ -25,7 +26,7 @@ const table=source.slice(source.indexOf('function materialTable('),source.indexO
 const renderer=source.slice(source.indexOf('function ticketHtml('),source.indexOf('function ticketFilters('));
 const expandedTickets=new Set();
 const html=runInNewContext(table+renderer+';ticketHtml',{
-  expandedTickets,
+  expandedTickets,state:{management:{cases:[]}},followupComplete,
   ticketDocumentCount,
   workBreakdown,minutesText,pickCompleteness,reasonLabels,documentSummary:()=>'',
   esc:v=>String(v??'').replace(/</g,'&lt;'),qtyText:v=>String(v),pickVarianceText,

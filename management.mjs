@@ -16,3 +16,11 @@ export function varianceRows(tickets,cases=[]){return tickets.filter(t=>!t.delet
 export function matchesText(values,query){const words=String(query).trim().toLocaleLowerCase('th').split(/\s+/).filter(Boolean),hay=values.join(' ').toLocaleLowerCase('th');return words.every(w=>hay.includes(w));}
 export function safeCsv(rows){return '\ufeff'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');}
 export function planOrder(tickets){const rank={urgent:0,high:1,normal:2};return [...tickets].sort((a,b)=>(rank[a.priority||'normal']-rank[b.priority||'normal'])||String(a.due_at||'9999').localeCompare(String(b.due_at||'9999'))||String(a.created_at).localeCompare(String(b.created_at)));}
+
+export function followupComplete(ticket,cases=[]){
+ if(ticket.deleted_at||!['done','partial'].includes(ticket.status))return false;
+ const lines=ticket.materials||[];
+ if(!lines.length||lines.some(l=>!l.confirmed_at||!Number.isFinite(l.actual_qty)||!Number.isFinite(Number(l.required_qty))))return false;
+ const rows=varianceRows([ticket],cases);
+ return rows.length>0&&rows.every(r=>r.status==='resolved');
+}

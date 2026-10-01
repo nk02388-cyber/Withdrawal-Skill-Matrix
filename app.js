@@ -1,3 +1,4 @@
+import {followupComplete} from './management.mjs?v=2';
 import {installManagement} from './management-ui.mjs';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
@@ -214,7 +215,8 @@ function renderDashboard(){
   $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานรอเริ่ม กำลังทำ หรือพักอยู่</strong><span>งานที่ยังเปิดจะแสดงที่นี่</span></div>`;
 }
 function ticketHtml(t){
-  const status=statusLabels[t.status]||t.status;
+  const resolved=followupComplete(t,state.management?.cases);
+  const status=resolved?'เบิกครบ':statusLabels[t.status]||t.status;
   const button=(action,label,primary=false)=>`<button type="button" class="${primary?'primary':'text-btn'}" data-action="${action}" data-id="${esc(t.id)}">${label}</button>`;
   let actions='';
   if(!t.deleted_at&&operator()){
@@ -232,9 +234,9 @@ function ticketHtml(t){
   actions+=button('history','ประวัติ');
   const timing=workBreakdown(t),completion=pickCompleteness(t);const duration=timing?`<br>ทำงานสุทธิ ${minutesText(timing.activeMinutes)}<br>พักในกะ ${minutesText(timing.waitingMinutes)} · รวม ${minutesText(timing.totalMinutes)}`:'';
   const varianceLines=(t.materials||[]).filter(line=>line.confirmed_at&&typeof line.actual_qty==='number'&&Math.round((line.actual_qty-Number(line.required_qty))*10000)!==0);
-  const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>รายการเบิกขาดหรือเกิน · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
+  const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>${resolved?'ประวัติขาด–เกิน · จัดการแล้ว':'รายการเบิกขาดหรือเกิน'} · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
   const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials" data-material-ticket="${esc(t.id)}"${expandedTickets.has(t.id)?' open':''}><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
-  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div><div class="data-completeness ${completion.complete?'complete':'incomplete'}">${esc(completion.label)}</div>${documentSummary(t)}${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>เหตุผล:</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(t.status)}">${t.deleted_at?'ลบแล้ว':status}</span><div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
+  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div><div class="data-completeness ${completion.complete?'complete':'incomplete'}">${esc(completion.label)}</div>${documentSummary(t)}${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>${resolved?'เหตุผลตอนจบงาน:':'เหตุผล:'}</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(resolved?'done':t.status)}">${t.deleted_at?'ลบแล้ว':status}</span>${resolved?'<p class="hint">จัดการผลติดตามครบแล้ว<br>ยอดเบิกเดิมเก็บเป็นประวัติ</p>':''}<div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value,dateBasis:$('#ticket-date-basis').value,completeness:$('#ticket-completeness').value};}
 function setSelectOptions(select,html){if(select.dataset.optionsHtml!==html){select.innerHTML=html;select.dataset.optionsHtml=html;}}
@@ -245,7 +247,7 @@ function renderTicketFilterOptions(){
     select.value=previous;
   }
 }
-function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:state.tickets,{...ticketFilters(),status:$('#ticket-filter').value==='deleted'?'':ticketFilters().status});}
+function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:state.tickets,{...ticketFilters(),status:['deleted','followup_complete'].includes($('#ticket-filter').value)?'':ticketFilters().status}).filter(t=>$('#ticket-filter').value!=='followup_complete'||followupComplete(t,state.management?.cases));}
 function rememberOpenMaterials(){
   $('#ticket-list').querySelectorAll('[data-material-ticket]').forEach(details=>{
     if(details.open)expandedTickets.add(details.dataset.materialTicket);
@@ -267,7 +269,7 @@ function reportFiltersText(filters){
   if(filters.assigneeId)parts.push(`พนักงาน: ${nameFor(filters.assigneeId)}`);
   if(filters.jobId)parts.push(`Job: ${jobFor(filters.jobId)}`);
   if(filters.dateFrom||filters.dateTo)parts.push(`${dateBasisLabel(filters.dateBasis)}: ${filters.dateFrom||'ทั้งหมด'} ถึง ${filters.dateTo||'ทั้งหมด'}`);
-  if(filters.status)parts.push(`สถานะ: ${statusLabels[filters.status]||filters.status}`);
+  if(filters.status)parts.push(`สถานะ: ${(filters.status==='followup_complete'?'เบิกครบ · จัดการติดตามแล้ว':statusLabels[filters.status]||filters.status)}`);
   return parts.length?parts.join(' · '):'ทุกใบเบิก';
 }
 function populateReport(list,filters){
@@ -275,7 +277,7 @@ function populateReport(list,filters){
   const rows=list.map((ticket,index)=>{
     const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)} · ${line.confirmed_at?`เบิกจริง ${qtyText(line.actual_qty)} · ${esc(pickVarianceText(line.required_qty,line.actual_qty,line.unit,qtyText))} ${esc(line.short_reason||'')}`:'ยังไม่ยืนยันเบิกจริง'}</span>`).join('')}</div>`:'';
     const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="10">${materials}<p>${esc(pickCompleteness(ticket).label)}</p>${documentSummary(ticket)}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
-    const status=statusLabels[ticket.status]||ticket.status;
+    const status=followupComplete(ticket,state.management?.cases)?'เบิกครบ':statusLabels[ticket.status]||ticket.status;
     return `<tbody class="report-ticket"><tr><td>${index+1}</td><td><strong>${esc(ticket.ticket_no)}</strong><br>${ticketDocumentCount(ticket)} ใบ · 1 งาน</td><td>${esc(fmtReport(ticket.created_at))}</td><td>${esc(nameFor(ticket.assignee_id))}</td><td>${esc(jobFor(ticket.job_type_id))}</td><td>${ticket.fg_code?`${esc(ticket.fg_code)}<br>${esc(ticket.fg_name||'')}<br><strong>${qtyText(ticket.requested_qty)} FG</strong>`:'—'}</td><td>${esc(status)}</td><td>${esc(fmtReport(ticket.started_at))}</td><td>${esc(fmtReport(ticket.ended_at))}</td><td>${esc(minutesText(workBreakdown(ticket)?.activeMinutes??null))}</td></tr>${detail}</tbody>`;
   }).join('');
   $('#print-report').innerHTML=`<header><img src="assets/bcl-logo.png" alt="BCL"><div><h1>รายงานใบเบิกของ</h1><p>พิมพ์เมื่อ ${esc(fmtReport(new Date()))} · เวลาไทย (UTC+7)</p></div></header><div class="report-filter-line"><strong>ตัวกรอง:</strong> ${esc(reportFiltersText(filters))}</div><div class="report-summary"><span>ทั้งหมด <strong>${totalDocuments(list)} ใบ · ${list.length} งาน</strong></span>${Object.entries(counts).map(([key,count])=>`<span>${statusLabels[key]} <strong>${count}</strong></span>`).join('')}</div><table class="report-table"><thead><tr><th>#</th><th>เลขที่ใบเบิก</th><th>วันที่สร้าง</th><th>พนักงาน</th><th>ประเภทงาน</th><th>FG / จำนวน</th><th>สถานะ</th><th>เริ่ม</th><th>สิ้นสุด</th><th>เวลาสุทธิ<br>(หักพัก/นอกกะ)</th></tr></thead>${rows||'<tbody><tr><td colspan="10">ไม่พบใบเบิกตามตัวกรอง</td></tr></tbody>'}</table><p class="report-note">จำนวนวัสดุคำนวณตาม BOM ที่บันทึกกับใบเบิก ไม่ใช่หลักฐานการตัดสต็อก · เวลาสุทธิคิดเฉพาะกะ 08:00–17:00 หักพักเที่ยงและช่วงพักงานโดยไม่หักซ้ำ</p>`;
