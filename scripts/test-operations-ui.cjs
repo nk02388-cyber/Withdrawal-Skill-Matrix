@@ -8,7 +8,8 @@ const server=http.createServer((req,res)=>{
  if(url.pathname.startsWith('/rest/v1/rpc/')){let body='';req.on('data',c=>body+=c);req.on('end',()=>{const a=JSON.parse(body||'{}'),name=url.pathname.split('/').pop();let response;
   if(name==='verify_role_code')response=a.p_username==='qa'&&a.p_code==='qa';
   else if(name==='get_dashboard_state')response=data;
-  else if(name==='get_deleted_tickets_as_supervisor'||name==='get_ticket_history')response=[];
+  else if(name==='get_deleted_tickets_as_supervisor')response=process.env.QA_TRASH_CONFLICT==='1'?[{...data.tickets[0],id:'44444444-4444-4444-8444-444444444444',ticket_no:'PK2610-0035',status:'cancelled',deleted_at:'2026-09-30T06:48:34Z',documents:[],materials:[]}]:[];
+  else if(name==='get_ticket_history')response=[];
   else if(name==='get_withdrawal_stock_catalog')response={snapshot_id:1,report_date:'fixture',snapshot_saved_at:new Date().toISOString(),items:[]};
   else if(name==='perform_work_action'){
    const args=a.p_args,t=data.tickets[0];

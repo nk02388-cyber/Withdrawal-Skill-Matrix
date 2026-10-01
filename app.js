@@ -10,7 +10,7 @@ import { filterTickets } from './ticket-report.mjs?v=2';
 import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=3';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
-import { ticketNumberExists, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=2';
+import { ticketNumberExists, ticketNumberConflicts, ticketConflictText, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=3';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -126,8 +126,12 @@ async function loadBom(){
 function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hidden=!msg;el.classList.toggle('error',error);}
 function showTicketNumberConflict(){
   const input=$('#ticket-form [name="ticket_no"]'),number=input.value.trim();
-  const suggestion=suggestTicketNumber(state.tickets,number);
-  $('#ticket-no-message').textContent='เลขที่ใบเบิกบางใบมีอยู่แล้ว กรุณาตรวจสอบแต่ละเลขที่';
+  const all=[...state.tickets,...state.deletedTickets],conflicts=ticketNumberConflicts(all,number);
+  const suggestion=suggestTicketNumber(all,number);
+  $('#ticket-no-message').textContent=ticketConflictText(conflicts);
+  const existing=$('#ticket-no-existing'),conflict=conflicts[0];
+  existing.hidden=!conflict;
+  if(conflict){existing.textContent=conflict.deleted?'เปิดใบเดิมในถังขยะ':'เปิดใบเบิกเดิม';existing.dataset.number=conflict.number;existing.dataset.deleted=String(conflict.deleted);}
   const button=$('#ticket-no-suggestion');button.hidden=!suggestion;
   if(suggestion){button.textContent=`ใช้เลข ${suggestion}`;button.dataset.suggestion=suggestion;}
   input.setAttribute('aria-invalid','true');input.focus();
@@ -135,9 +139,10 @@ function showTicketNumberConflict(){
 function checkTicketNumber(){
   const input=$('#ticket-form [name="ticket_no"]');
   updateDocumentCount(input);
+  $('#ticket-no-existing').hidden=true;$('#ticket-no-suggestion').hidden=true;
   const error=ticketNumbersError(input.value);if(error){$('#ticket-no-message').textContent=error;input.setAttribute('aria-invalid','true');return false;}
-  if(ticketNumberExists(state.tickets,input.value)){showTicketNumberConflict();return false;}
-  $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;
+  if(ticketNumberExists([...state.tickets,...state.deletedTickets],input.value)){showTicketNumberConflict();return false;}
+  $('#ticket-no-message').textContent='';
   input.removeAttribute('aria-invalid');return true;
 }
 function updateDocumentCount(input){
@@ -398,7 +403,7 @@ $('#new-ticket-btn').addEventListener('click',async()=>{
   const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
   if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
   state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();updateDocumentCount($('#ticket-form [name="ticket_no"]'));
-  $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;$('#ticket-form [name="ticket_no"]').removeAttribute('aria-invalid');
+  $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;$('#ticket-no-existing').hidden=true;$('#ticket-form [name="ticket_no"]').removeAttribute('aria-invalid');
   const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
   if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
   $('#ticket-form [name="job_type_id"]').innerHTML=jobs.map(j=>`<option value="${esc(j.id)}">${esc(j.name)}</option>`).join('');
@@ -411,6 +416,12 @@ $('#new-ticket-btn').addEventListener('click',async()=>{
 $('#bom-search').addEventListener('input',renderBomOptions);
 $('#ticket-form [name="ticket_no"]').addEventListener('input',checkTicketNumber);
 $('#ticket-no-suggestion').addEventListener('click',e=>{const input=$('#ticket-form [name="ticket_no"]');input.value=e.currentTarget.dataset.suggestion;checkTicketNumber();input.focus();});
+$('#ticket-no-existing').addEventListener('click',e=>{
+  const button=e.currentTarget;$('#ticket-dialog').close();
+  $('#ticket-search').value=button.dataset.number;$('#ticket-filter').value=button.dataset.deleted==='true'?'deleted':'all';
+  $('#ticket-person-filter').value='';$('#ticket-job-filter').value='';$('#ticket-date-from').value='';$('#ticket-date-to').value='';$('#ticket-completeness').value='all';
+  showView('tickets');renderTickets();
+});
 $('#bom-results').addEventListener('click',e=>{
   const choice=e.target.closest('[data-bom-choice]');
   if(!choice)return;
