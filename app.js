@@ -1,4 +1,3 @@
-import {installCompetencies} from './competencies-ui.mjs';
 import {installManagement} from './management-ui.mjs';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
@@ -170,13 +169,13 @@ async function load(silent=false){
   syncLabel('กำลังซิงก์…');
   const {data,error}=await state.db.rpc('get_dashboard_state');
   if(error){syncLabel('ซิงก์ไม่สำเร็จ');if(!silent)notice(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`,true);return;}
-  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];state.standards=data.standards||[];await management.refresh();await competencies.refresh();
+  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];state.standards=data.standards||[];await management.refresh();
   state.deletedTickets=[];
   if(supervisor()){const trash=await state.db.rpc('get_deleted_tickets_as_supervisor',{p_username:state.username,p_code:state.code});if(trash.error){if(!silent)notice('โหลดถังขยะไม่สำเร็จ',true);}else if(supervisor())state.deletedTickets=trash.data||[];}
   syncLabel(`อัปเดต ${formatBangkokClock(Date.now())} น. (เวลาไทย)`,true);
   render();
 }
-function render(){management.render();competencies.render();renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();renderTrash();}}
+function render(){management.render();renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();renderTrash();}}
 function renderExperienceMatrix(people,jobs,tickets){
   if(!people.length||!jobs.length)return empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก');
   return `<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(job=>`<th>${esc(job.name)}</th>`).join('')}</tr></thead><tbody>${people.map(person=>`<tr><td><div class="matrix-person">${personPortrait(person)}<span class="person-name">${esc(person.display_name)}</span></div></td>${jobs.map(job=>{
@@ -608,5 +607,4 @@ $('#purge-form').addEventListener('submit',async e=>{
 });
 
 const management=installManagement({state,supervisor,editing,showView,notice,load,nameFor,jobFor,openTicket(t){if(!t)return;$('#ticket-search').value=t.ticket_no;$('#ticket-person-filter').value='';$('#ticket-job-filter').value='';$('#ticket-date-from').value='';$('#ticket-date-to').value='';$('#ticket-filter').value='all';$('#ticket-completeness').value='all';expandedTickets.add(t.id);renderTickets();showView('tickets');}});
-const competencies=installCompetencies({state,supervisor,mutate});
 boot();
