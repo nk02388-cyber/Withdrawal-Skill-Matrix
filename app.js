@@ -1,3 +1,4 @@
+import {installManagement} from './management-ui.mjs';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode } from './picking.mjs?v=3';
@@ -156,7 +157,7 @@ function updateMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.hidden=!supervisor());
   $('#user-label').textContent=supervisor()?`หัวหน้า · ${state.username}`:operator()?`ผู้ทำรายการ · ${nameFor(state.actorId)}`:'โหมดดูข้อมูล';
   $('#edit-btn').textContent=editing()?'ออกจากโหมด':'เข้าสู่โหมดทำงาน';
-  if(!supervisor()&&['people','settings','trash'].includes(state.view))showView('dashboard');
+  if(!supervisor()&&['people','settings','trash','system'].includes(state.view))showView('dashboard');
   const trash=$('#ticket-filter option[value=deleted]');if(trash)trash.remove();
   if(supervisor())$('#ticket-filter').insertAdjacentHTML('beforeend','<option value="deleted">ถังขยะ (หัวหน้า)</option>');
   else {state.deletedTickets=[];if($('#ticket-filter').value==='deleted')$('#ticket-filter').value='all';}
@@ -168,13 +169,13 @@ async function load(silent=false){
   syncLabel('กำลังซิงก์…');
   const {data,error}=await state.db.rpc('get_dashboard_state');
   if(error){syncLabel('ซิงก์ไม่สำเร็จ');if(!silent)notice(`โหลดข้อมูลไม่สำเร็จ: ${error.message}`,true);return;}
-  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];state.standards=data.standards||[];
+  state.people=data.people||[];state.jobs=data.jobs||[];state.tickets=data.tickets||[];state.skills=data.skills||[];state.standards=data.standards||[];await management.refresh();
   state.deletedTickets=[];
   if(supervisor()){const trash=await state.db.rpc('get_deleted_tickets_as_supervisor',{p_username:state.username,p_code:state.code});if(trash.error){if(!silent)notice('โหลดถังขยะไม่สำเร็จ',true);}else if(supervisor())state.deletedTickets=trash.data||[];}
   syncLabel(`อัปเดต ${formatBangkokClock(Date.now())} น. (เวลาไทย)`,true);
   render();
 }
-function render(){renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();renderTrash();}}
+function render(){management.render();renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();renderTrash();}}
 function renderExperienceMatrix(people,jobs,tickets){
   if(!people.length||!jobs.length)return empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก');
   return `<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(job=>`<th>${esc(job.name)}</th>`).join('')}</tr></thead><tbody>${people.map(person=>`<tr><td><div class="matrix-person">${personPortrait(person)}<span class="person-name">${esc(person.display_name)}</span></div></td>${jobs.map(job=>{
@@ -374,7 +375,7 @@ $('#ticket-edit-form').addEventListener('submit',async e=>{
   const args={p_documents:readDocuments(e.target),p_ticket_id:editingTicketId,p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_requested_qty:qty,p_started_at:startedAt,p_ended_at:endedAt,p_reason:reason};
   if(await mutate('edit_ticket_with_times_as_supervisor',args,'แก้ไขใบเบิกและบันทึกประวัติแล้ว','#ticket-edit-message')){$('#ticket-edit-dialog').close();editingTicketId=null;}
 });
-function clearRole(){state.role='';state.username='';state.code='';state.verified=false;state.actorId='';['workRole','workUsername','workCode','workActorId'].forEach(key=>sessionStorage.removeItem(key));}
+function clearRole(){management.clear();state.role='';state.username='';state.code='';state.verified=false;state.actorId='';['workRole','workUsername','workCode','workActorId'].forEach(key=>sessionStorage.removeItem(key));}
 $('#edit-btn').addEventListener('click',()=>{if(editing()){clearRole();updateMode();notice('ออกจากโหมดทำงานแล้ว');}else {refreshActorOptions();$('#code-dialog').showModal();}});
 const themeButton=$('#theme-toggle');
 function syncThemeButton(){
@@ -393,7 +394,7 @@ themeButton.addEventListener('click',()=>{
 });
 window.addEventListener('storage',e=>{if(e.key==='bcl-display-theme'){document.documentElement.dataset.theme=e.newValue==='light'?'light':'dark';syncThemeButton();}});
 syncThemeButton();
-$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),actorId=String(f.get('actor_id')||'');if(role==='operator'&&!actorId){$('#code-message').textContent='กรุณาเลือกผู้ทำรายการ';return;}const username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.actorId=actorId;sessionStorage.setItem('workActorId',actorId);state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();await load(true);notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
+$('#code-form').addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.target),role=String(f.get('role')),actorId=String(f.get('actor_id')||'');if(role==='operator'&&!actorId){$('#code-message').textContent='กรุณาเลือกผู้ทำรายการ';return;}const username=String(f.get('username')).trim(),code=String(f.get('code'));const {data,error}=await state.db.rpc('verify_role_code',{p_role:role,p_username:username,p_code:code});if(error||!data){$('#code-message').textContent='ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง';return;}state.actorId=actorId;sessionStorage.setItem('workActorId',actorId);state.role=role;state.username=username;state.code=code;state.verified=true;sessionStorage.setItem('workRole',role);sessionStorage.setItem('workUsername',username);sessionStorage.setItem('workCode',code);e.target.reset();$('#code-message').textContent='';$('#code-dialog').close();updateMode();await load(true);notice(role==='supervisor'?'เข้าสู่โหมดหัวหน้าแล้ว':role==='clerk'?'เข้าสู่โหมดธุรการแล้ว':'เข้าสู่โหมดปฏิบัติงานแล้ว');});
 $('#refresh-btn').addEventListener('click',()=>load());
 ['#ticket-search','#ticket-date-from','#ticket-date-to'].forEach(selector=>$(selector).addEventListener('input',renderTickets));
 ['#ticket-person-filter','#ticket-job-filter','#ticket-filter','#ticket-date-basis','#ticket-completeness'].forEach(selector=>$(selector).addEventListener('change',renderTickets));
@@ -496,7 +497,6 @@ $('#job-form').addEventListener('submit',async e=>{e.preventDefault();const name
 document.addEventListener('change',async e=>{let fn,args;if(e.target.matches('[data-active]')){fn='set_staff_active_as_supervisor';args={p_staff_id:e.target.dataset.active,p_active:e.target.checked};}else if(e.target.matches('[data-job-active]')){fn='set_job_active_as_supervisor';args={p_job_id:e.target.dataset.jobActive,p_active:e.target.checked};}else if(e.target.matches('[data-skill]')){fn='set_skill_rating_as_supervisor';args={p_staff_id:e.target.dataset.skill,p_job_id:e.target.dataset.job,p_level:Number(e.target.value)};}else return;await mutate(fn,args,'บันทึกแล้ว');});
 
 async function boot(){if(!SUPABASE_URL||!SUPABASE_PUBLISHABLE_KEY){syncLabel('ยังไม่ตั้งค่าฐานข้อมูล');notice('ยังไม่ได้ตั้งค่าฐานข้อมูลกลาง',true);return;}state.db=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});if(state.role&&state.username&&state.code){const {data,error}=await state.db.rpc('verify_role_code',{p_role:state.role,p_username:state.username,p_code:state.code});if(!error&&data&&!(state.role==='operator'&&!state.actorId))state.verified=true;else clearRole();}updateMode();await load();setInterval(()=>{if(!document.hidden)load(true)},15000);}
-boot();
 
 let pendingPicks=null;
 function openPicks(ticket,closeStatus,supervisorEdit=false){
@@ -605,3 +605,6 @@ $('#purge-form').addEventListener('submit',async e=>{
   try{if(await mutate('purge_ticket_as_supervisor',{p_ticket_id:ticket.id,p_expected_deleted_at:ticket.deleted_at,p_confirm_number:confirmation.trim(),p_reason:reason},'ลบถาวรแล้ว เลขใบเบิกกลับมาใช้ใหม่ได้','#purge-message')){$('#purge-dialog').close();pendingPurge=null;expandedTickets.delete(ticket.id);}}
   finally{button.disabled=false;}
 });
+
+const management=installManagement({state,supervisor,editing,showView,notice,load,nameFor,jobFor,openTicket(t){if(!t)return;$('#ticket-search').value=t.ticket_no;$('#ticket-person-filter').value='';$('#ticket-job-filter').value='';$('#ticket-date-from').value='';$('#ticket-date-to').value='';$('#ticket-filter').value='all';$('#ticket-completeness').value='all';expandedTickets.add(t.id);renderTickets();showView('tickets');}});
+boot();

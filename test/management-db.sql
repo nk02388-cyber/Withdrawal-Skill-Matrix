@@ -1,0 +1,35 @@
+begin;
+do $$
+declare t uuid;j uuid;p uuid;current_plan jsonb;current_settings jsonb;updated text;fingerprint text;result jsonb;
+begin
+ update app_settings set value=case when key='supervisor_username' then 'qa-supervisor' when key='supervisor_code' then extensions.crypt('qa-secret',extensions.gen_salt('bf')) else value end where key in ('supervisor_username','supervisor_code');
+ perform manage_work('qa-supervisor','qa-secret','supervisor','clerk_account','{"username":"qa-clerk","password":"qa-secret"}');
+ select id into j from job_types where active limit 1;select id into p from staff where active limit 1;
+ insert into tickets(ticket_no,job_type_id,assignee_id,status,materials) values('QA-MGMT-'||left(gen_random_uuid()::text,12),j,p,'queued','[]') returning id into t;
+ select jsonb_build_array(planned_date,due_at,priority,assignee_id) into current_plan from tickets where id=t;
+ begin perform manage_work('qa-clerk','qa-secret','clerk','plan',jsonb_build_object('ticket_id',t));raise exception 'Test: clerk plan unexpectedly allowed';exception when others then if sqlerrm like 'Test:%' then raise;end if;end;
+ perform manage_work('qa-supervisor','qa-secret','supervisor','plan',jsonb_build_object('ticket_id',t,'planned_date','2026-10-01','due_at','2026-10-01T10:00:00+07:00','priority','urgent','assignee_id',p,'expected',current_plan));
+ if (select priority from tickets where id=t)<>'urgent' then raise exception 'Test: plan not saved';end if;
+ begin perform manage_work('qa-supervisor','qa-secret','supervisor','plan',jsonb_build_object('ticket_id',t,'priority','normal','assignee_id',p,'expected',current_plan));raise exception 'Test: stale plan unexpectedly allowed';exception when others then if sqlerrm like 'Test:%' then raise;end if;end;
+ update tickets set materials='[{"pk_code":"QA-A","pk_name":"test","unit":"ชิ้น","required_qty":10}]' where id=t;
+ update tickets set status='partial',started_at='2026-10-01T01:00:00Z',ended_at='2026-10-01T02:00:00Z',materials='[{"pk_code":"QA-A","pk_name":"test","unit":"ชิ้น","required_qty":10,"actual_qty":8,"confirmed_at":"2026-10-01T02:00:00Z"}]' where id=t;
+ fingerprint:='["QA-A",10,8,"2026-10-01T02:00:00Z"]';
+ perform manage_work('qa-clerk','qa-secret','clerk','case',jsonb_build_object('ticket_id',t,'line_index',0,'fingerprint',fingerprint,'status','following','note','QA follow-up','expected_updated_at',''));
+ select updated_at::text into updated from material_cases where ticket_id=t;
+ begin perform manage_work('qa-clerk','qa-secret','clerk','case',jsonb_build_object('ticket_id',t,'line_index',0,'fingerprint',fingerprint,'status','resolved','note','QA','expected_updated_at',''));raise exception 'Test: stale follow-up unexpectedly allowed';exception when others then if sqlerrm like 'Test:%' then raise;end if;end;
+ select to_jsonb(c)->>'updated_at' into updated from material_cases c where ticket_id=t;
+ perform manage_work('qa-clerk','qa-secret','clerk','case',jsonb_build_object('ticket_id',t,'line_index',0,'fingerprint',fingerprint,'status','resolved','note','QA resolved','expected_updated_at',updated));
+ if (select status from material_cases where ticket_id=t)<>'resolved' then raise exception 'Test: case not resolved';end if;
+ select settings into current_settings from work_management_settings;
+ begin perform manage_work('qa-supervisor','qa-secret','supervisor','settings',jsonb_build_object('settings',current_settings||'{"start":"18:00"}'::jsonb,'expected',current_settings));raise exception 'Test: reversed shift allowed';exception when others then if sqlerrm like 'Test:%' then raise;end if;end;
+ perform manage_work('qa-supervisor','qa-secret','supervisor','settings',jsonb_build_object('settings',current_settings||'{"start":"09:00","holidays":["2026-10-02"]}'::jsonb,'expected',current_settings));
+ begin perform manage_work('qa-clerk','qa-secret','clerk','settings',jsonb_build_object('settings',current_settings,'expected',current_settings));raise exception 'Test: clerk settings unexpectedly allowed';exception when others then if sqlerrm like 'Test:%' then raise;end if;end;
+ result:=manage_work('qa-clerk','qa-secret','clerk','history','{}');
+ if not exists(select 1 from jsonb_array_elements(result) e where e->>'event_type'='case' and e->'before_state'->>'status'='following') then raise exception 'Test: history missing before/after';end if;
+ perform set_ticket_deleted_as_supervisor('qa-supervisor','qa-secret',t,'QA trash',true);
+ perform purge_ticket_as_supervisor('qa-supervisor','qa-secret',t,(select deleted_at from tickets where id=t),(select ticket_no from tickets where id=t),'QA purge');
+ if exists(select 1 from material_cases where ticket_id=t) then raise exception 'Test: orphan case';end if;
+ if not exists(select 1 from management_events where event_type='purged' and reason='QA purge') then raise exception 'Test: no deletion receipt';end if;
+end $$;
+select jsonb_build_object('result','all management role, stale write, history and purge tests passed','anon_direct_table_write',has_table_privilege('anon','public.material_cases','INSERT'),'rollback',true);
+rollback;

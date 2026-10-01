@@ -1,4 +1,6 @@
 const MINUTE=60000,DAY=86400000,OFFSET=7*3600000;
+let workSettings={start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[]};
+export function configureWorkTime(settings){workSettings={...workSettings,...settings};for(const [key,label] of Object.entries(settings.reasonNames||{}))if(key in reasonLabels&&typeof label==='string'&&label.trim())reasonLabels[key]=label;}
 export const reasonLabels={stock_shortage:'สต็อกไม่พอ',approved_extra:'เบิกเผื่อที่ได้รับอนุมัติ',bom_difference:'สูตรหรือใบเบิกคลาดเคลื่อน',picking_error:'หยิบผิด',other:'อื่น ๆ'};
 const dateMs=value=>value?Date.parse(value):NaN;
 function merged(ranges){
@@ -11,7 +13,9 @@ export function workBreakdown(ticket,now=Date.now()){
   const pauses=merged((ticket.pause_intervals||[]).map(p=>[Math.max(start,dateMs(p.start)),Math.min(end,p.end?dateMs(p.end):end)]));
   let shift=0,waiting=0;
   for(let day=Math.floor((start+OFFSET)/DAY)*DAY-OFFSET;day<=end;day+=DAY){
-    for(const [from,to] of [[8,12],[13,17]]){
+    if(workSettings.holidays.includes(new Date(day+OFFSET).toISOString().slice(0,10)))continue;
+    const hour=v=>Number(v.split(':')[0])+Number(v.split(':')[1])/60;
+    for(const [from,to] of [[hour(workSettings.start),hour(workSettings.lunchStart)],[hour(workSettings.lunchEnd),hour(workSettings.end)]]){
       const a=Math.max(start,day+from*3600000),b=Math.min(end,day+to*3600000);
       if(b<=a)continue;shift+=b-a;
       for(const [p,q] of pauses)waiting+=Math.max(0,Math.min(b,q)-Math.max(a,p));
