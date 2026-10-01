@@ -1,5 +1,5 @@
 import {followupComplete,reportingTickets,varianceRows} from './management.mjs?v=6';
-import {installManagement} from './management-ui.mjs?v=5';
+import {installManagement} from './management-ui.mjs?v=6';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=4';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=7';
@@ -60,14 +60,14 @@ function renderBomOptions(){
   const exact=matches.find(f=>f.fg_code.toLocaleLowerCase('th-TH')===term.toLocaleLowerCase('th-TH'));
   state.selectedFormulaCode=(exact||matches.length===1?exact||matches[0]:null)?.fg_code||'';
   $('#bom-results').innerHTML=matches.slice(0,30).map(f=>`<button type="button" class="bom-result ${f.fg_code===state.selectedFormulaCode?'selected':''}" data-bom-choice="${esc(f.fg_code)}" aria-pressed="${f.fg_code===state.selectedFormulaCode}"><strong>${esc(f.fg_code)}</strong><span>${esc(f.fg_name)}</span></button>`).join('');
-  $('#bom-source').textContent=`สูตรจาก PK WMS · ${state.bom.formulas.length} สินค้า · ${!term?'พิมพ์เพื่อค้นหา':!matches.length?'ไม่พบสูตรที่ตรงกับคำค้น':`พบ ${matches.length} รายการ${matches.length>30?' · แสดง 30 รายการแรก':''}${state.selectedFormulaCode?' · เลือกสูตรแล้ว':' · กดเลือกรายการที่ต้องการ'}`} · ไม่รวมยอดสต็อก`;
+  $('#bom-source').textContent=`PK WMS · ${state.bom.formulas.length} สินค้า · ${!term?'พิมพ์เพื่อค้นหา':!matches.length?'ไม่พบสูตรที่ตรงกับคำค้น':`พบ ${matches.length} รายการ${matches.length>30?' · แสดง 30 รายการแรก':''}${state.selectedFormulaCode?' · เลือกสูตรแล้ว':' · เลือกสูตร'}`}`;
   renderBomPreview();
   renderStockMatch();
 }
 function renderBomPreview(){
   if(!$('#bom-fields').hidden&& !state.bom){$('#bom-preview').innerHTML=empty('โหลด BOM ไม่สำเร็จ เลือกเบิกเฉพาะรายการ Stock ได้');return;}
   const f=chosenFormula(),qty=Number($('#ticket-form [name="requested_qty"]').value);
-  if(!f){$('#bom-preview').innerHTML=empty('พิมพ์รหัสหรือชื่อสินค้า FG แล้วเลือกรายการที่ต้องการจากผลค้นหา');return;}
+  if(!f){$('#bom-preview').innerHTML=empty('เลือกสินค้า FG เพื่อดูวัสดุ');return;}
   if(f.lines.some(l=>!Number.isFinite(Number(l.qty_per_unit))||Number(l.qty_per_unit)<=0)){$('#bom-preview').innerHTML=empty('สูตรนี้มีอัตราใช้วัสดุไม่ครบ กรุณาตรวจสูตรใน PK WMS ก่อนสร้างใบเบิก');return;}
   if(!Number.isFinite(qty)||qty<=0){$('#bom-preview').innerHTML=`<div class="bom-summary"><strong>${esc(f.fg_code)} · ${esc(f.fg_name)}</strong><span>${f.lines.length} รายการวัสดุ</span></div><div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>รหัส PK / วัตถุดิบ</th><th>อัตราต่อ 1 FG</th></tr></thead><tbody>${f.lines.map(l=>`<tr><td><strong>${esc(l.pk_code)}</strong><small>${esc(l.pk_name)}</small></td><td>${qtyText(l.qty_per_unit)} ${esc(l.unit)}</td></tr>`).join('')}</tbody></table></div><p class="hint">กรอกจำนวนผลิตเพื่อคำนวณวัสดุ</p>`;return;}
   const lines=f.lines.map(l=>({...l,required_qty:calcQty(l.qty_per_unit,qty)}));
