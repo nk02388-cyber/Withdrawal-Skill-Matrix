@@ -1,7 +1,7 @@
 import {installManagement} from './management-ui.mjs';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
-import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode } from './picking.mjs?v=3';
+import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=4';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
 import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
 import { presetDates } from './dashboard-filters.mjs';
@@ -505,11 +505,18 @@ function openPicks(ticket,closeStatus,supervisorEdit=false){
  $('#pick-message').textContent='';$('#pick-save').textContent=supervisorEdit?'บันทึกการแก้ไข':closeStatus?'บันทึกและปิดงาน':'บันทึกเบิกจริง';
  $('#pick-edit-reason-wrap').hidden=!supervisorEdit;$('#pick-edit-reason').required=supervisorEdit;$('#pick-edit-reason').value='';
  $('#pick-edit-hint').hidden=!supervisorEdit;
- $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label>รูปแบบจำนวน<select aria-label="รูปแบบรายการ ${i+1}" data-pick-mode="${i}"><option value="actual">จำนวนเบิกจริง</option><option value="short">จำนวนขาด</option><option value="over">จำนวนเกิน</option></select></label><label><span data-pick-label="${i}">จำนวนเบิกจริง</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${l.confirmed_at?Number(l.actual_qty):''}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>ประเภทเหตุผล<select data-pick-cause="${i}" aria-label="ประเภทเหตุผลรายการ ${i+1}"><option value="">เลือกเมื่อเบิกขาดหรือเกิน</option>${Object.entries(reasonLabels).map(([code,label])=>`<option value="${code}" ${l.reason_code===code?'selected':''}>${label}</option>`).join('')}</select></label><label>รายละเอียดเหตุผล<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
+ $('#pick-lines').innerHTML=ticket.materials.map((l,i)=>`<fieldset class="pick-line"><legend>${i+1}. ${esc(l.pk_code)}</legend><p>${esc(l.pk_name)}</p><p>ต้องเบิก <strong>${qtyText(l.required_qty)} ${esc(l.unit)}</strong></p><div class="pick-quantity-fields"><label>รูปแบบจำนวน<select aria-label="รูปแบบรายการ ${i+1}" data-pick-mode="${i}"><option value="actual">จำนวนเบิกจริง</option><option value="short">จำนวนขาด</option><option value="over">จำนวนเกิน</option></select></label><label><span data-pick-label="${i}">จำนวนเบิกจริง</span><input aria-label="เบิกจริงรายการ ${i+1}" data-pick-qty="${i}" type="number" required min="0" max="1000000000" step="0.0001" value="${defaultPickActual(l)}"></label></div><button class="text-btn" type="button" data-pick-full="${i}">เบิกครบรายการนี้</button><p data-pick-short="${i}" class="hint"></p><label>ประเภทเหตุผล<select data-pick-cause="${i}" aria-label="ประเภทเหตุผลรายการ ${i+1}"><option value="">เลือกเมื่อเบิกขาดหรือเกิน</option>${Object.entries(reasonLabels).map(([code,label])=>`<option value="${code}" ${l.reason_code===code?'selected':''}>${label}</option>`).join('')}</select></label><label>รายละเอียดเหตุผล<textarea aria-label="เหตุผลรายการ ${i+1}" data-pick-reason="${i}" maxlength="1000">${esc(l.short_reason||'')}</textarea></label></fieldset>`).join('');
  updatePickShorts();$('#pick-dialog').showModal();
 }
 function readPickActual(i){return actualFromInput(pendingPicks.materials[i].required_qty,$('[data-pick-qty="'+i+'"]').value,$('[data-pick-mode="'+i+'"]').value);}
-function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const mode=$('[data-pick-mode="'+i+'"]'),input=$('[data-pick-qty="'+i+'"]'),label=({actual:'จำนวนเบิกจริง',short:'จำนวนขาด',over:'จำนวนเกิน'})[mode.value];$('[data-pick-label="'+i+'"]').textContent=label+' ('+l.unit+')';input.setAttribute('aria-label',label+'รายการ '+(i+1));const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);$('[data-pick-cause="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);});}
+function updatePickShorts(){if(!pendingPicks)return;pendingPicks.materials.forEach((l,i)=>{const mode=$('[data-pick-mode="'+i+'"]'),input=$('[data-pick-qty="'+i+'"]'),label=({actual:'จำนวนเบิกจริง',short:'จำนวนขาด',over:'จำนวนเกิน'})[mode.value];$('[data-pick-label="'+i+'"]').textContent=label+' ('+l.unit+')';input.setAttribute('aria-label',label+'รายการ '+(i+1));const qty=readPickActual(i);$('[data-pick-short="'+i+'"]').textContent=qty===null?'ยังไม่ยืนยัน':!Number.isFinite(qty)||qty<0?'จำนวนไม่ถูกต้อง':'เบิกจริง '+qtyText(qty)+' '+l.unit+' · '+pickVarianceText(l.required_qty,qty,l.unit,qtyText);$('[data-pick-reason="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);$('[data-pick-cause="'+i+'"]').required=qty!==null&&qty!==Number(l.required_qty);});updatePickClosure();}
+function updatePickClosure(){
+ const p=pendingPicks,summary=$('#pick-close-summary');summary.hidden=!p?.closeStatus&&!p?.supervisorEdit;
+ if(summary.hidden)return;
+ const picks=p.materials.map((_,i)=>({actual_qty:readPickActual(i)})),status=automaticPickCloseStatus(p.materials,picks,'done');
+ summary.textContent='สถานะปิดงานอัตโนมัติ: '+(status==='partial'?'เบิกไม่ครบ — มีรายการขาด':'เสร็จแล้ว — ไม่มีรายการขาด');
+ if(!p.supervisorEdit)$('#pick-save').textContent=status==='partial'?'บันทึกและปิดเป็นเบิกไม่ครบ':'บันทึกและจบงาน';
+}
 $('#pick-lines').addEventListener('input',updatePickShorts);
 $('#pick-lines').addEventListener('change',e=>{
   const mode=e.target.closest('[data-pick-mode]');
@@ -520,9 +527,10 @@ $('#pick-lines').addEventListener('click',e=>{const b=e.target.closest('[data-pi
 $('#pick-form').addEventListener('submit',async e=>{
  e.preventDefault();if(!pendingPicks||!(pendingPicks.supervisorEdit?supervisor():operator()))return;
  const p=pendingPicks,picks=p.materials.map((l,i)=>({actual_qty:readPickActual(i),reason_code:$('[data-pick-cause="'+i+'"]').value,short_reason:$('[data-pick-reason="'+i+'"]').value.trim()}));
- const error=pickError(p.materials,picks,p.supervisorEdit?null:p.closeStatus);if(error){$('#pick-message').textContent=error;return;}
+ const closeStatus=p.supervisorEdit?null:automaticPickCloseStatus(p.materials,picks,p.closeStatus);
+ const error=pickError(p.materials,picks,closeStatus);if(error){$('#pick-message').textContent=error;return;}
  $('#pick-save').disabled=true;
- const args={p_ticket_id:p.id,p_expected_materials:p.materials,p_expected_status:p.status,p_picks:picks,...(p.supervisorEdit?{p_edit_reason:$('#pick-edit-reason').value.trim()}:{p_close_status:p.closeStatus})};
+ const args={p_ticket_id:p.id,p_expected_materials:p.materials,p_expected_status:p.status,p_picks:picks,...(p.supervisorEdit?{p_edit_reason:$('#pick-edit-reason').value.trim()}:{p_close_status:closeStatus})};
  try{if(await mutate(p.supervisorEdit?'edit_ticket_picks_as_supervisor':'confirm_ticket_picks_as_operator',args,p.supervisorEdit?'แก้ไขเบิกจริงและบันทึกประวัติแล้ว':p.closeStatus?'บันทึกเบิกจริงและปิดงานแล้ว':'บันทึกเบิกจริงแล้ว','#pick-message'))$('#pick-dialog').close();}finally{$('#pick-save').disabled=false;}
 });
 $('#staff-edit-form').addEventListener('submit',async e=>{e.preventDefault();if(!supervisor())return;const form=e.target,button=form.querySelector('[type=submit]');button.disabled=true;try{if(await mutate('edit_staff_profile_as_supervisor',{p_staff_id:form.elements.staff_id.value,p_name:form.elements.name.value.trim(),p_position:form.elements.position.value.trim(),p_expected:editingStaffSnapshot},'แก้ไขข้อมูลพนักงานแล้ว','#staff-edit-message'))$('#staff-edit-dialog').close();}finally{button.disabled=false;}});

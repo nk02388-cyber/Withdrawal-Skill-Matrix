@@ -37,3 +37,12 @@ export function convertPickMode(required,value,previous,next){
  const converted=Math.round((next==='short'?Number(required)-actual:next==='over'?actual-Number(required):actual)*10000)/10000;
  return converted<0?'':String(converted);
 }
+
+export function defaultPickActual(line){
+ const actual=line.confirmed_at?line.actual_qty:line.required_qty;
+ return actual!==null&&actual!==undefined&&Number.isFinite(Number(actual))?Number(actual):'';
+}
+export function automaticPickCloseStatus(materials,picks,requested){
+ if(!requested)return null;
+ return materials.some((line,i)=>typeof picks[i]?.actual_qty==='number'&&picks[i].actual_qty<Number(line.required_qty))?'partial':'done';
+}
