@@ -1,5 +1,5 @@
-import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder} from './management.mjs?v=5';
-import {configureWorkTime,workBreakdown,minutesText,operationalPerformance,pickCompleteness,reasonLabels} from './operations.mjs?v=2';
+import {defaultSettings,settingsError,varianceRows,matchesText,safeCsv,planOrder,reportingTickets} from './management.mjs?v=6';
+import {configureWorkTime,workBreakdown,minutesText,operationalPerformance,pickCompleteness,reasonLabels} from './operations.mjs?v=3';
 import {totalDocuments,ticketDocumentCount} from './withdrawal-documents.mjs';
 import {fromBangkokInput,toBangkokInput,formatBangkokDateTime} from './ticket-time.mjs?v=2';
 const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -55,7 +55,7 @@ export function installManagement(ctx){
  function analyticsRows(){
   const from=$('#analytics-from').value,to=$('#analytics-to').value,person=$('#analytics-person').value,job=$('#analytics-job').value,group=$('#analytics-group').value;
   if(from&&to&&from>to){$('#analytics-summary').textContent='วันที่เริ่มต้องไม่หลังวันที่สิ้นสุด';return [];}
-  const tickets=state.tickets.filter(t=>['done','partial'].includes(t.status)&&t.ended_at&&(!person||t.assignee_id===person)&&(!job||t.job_type_id===job)&&(!from||toBangkokInput(t.ended_at).slice(0,10)>=from)&&(!to||toBangkokInput(t.ended_at).slice(0,10)<=to));
+  const tickets=reportingTickets(state.tickets,state.management.cases).filter(t=>['done','partial'].includes(t.status)&&t.ended_at&&(!person||t.assignee_id===person)&&(!job||t.job_type_id===job)&&(!from||toBangkokInput(t.ended_at).slice(0,10)>=from)&&(!to||toBangkokInput(t.ended_at).slice(0,10)<=to));
   const groups=new Map();for(const t of tickets){const key=group==='person'?t.assignee_id:group==='job'?t.job_type_id:toBangkokInput(t.ended_at).slice(0,group==='day'?10:7);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(t);}
   $('#analytics-summary').textContent=`${tickets.length} งานที่จบ · ${totalDocuments(tickets)} ใบ · ตามวันที่จบงาน`;
   return [...groups].sort((a,b)=>a[0].localeCompare(b[0],'th')).map(([key,ts])=>{const q=operationalPerformance(ts,state.standards);return [group==='person'?nameFor(key):group==='job'?jobFor(key):key,ts.length,totalDocuments(ts),ts.reduce((s,t)=>s+(t.materials?.length||0),0),ts.filter(t=>t.status==='done').length,ts.filter(t=>t.status==='partial').length,ts.filter(t=>pickCompleteness(t).complete).length,minutesText(ts.reduce((s,t)=>s+(workBreakdown(t)?.activeMinutes||0),0)),q.efficiency===null?'ไม่มีมาตรฐาน/ข้อมูลไม่ครบ':q.efficiency+'% ('+q.matched+' งาน)'];});

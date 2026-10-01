@@ -1,6 +1,6 @@
-import {followupComplete} from './management.mjs?v=5';
-import {installManagement} from './management-ui.mjs?v=2';
-import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=2';
+import {followupComplete,reportingTickets,varianceRows} from './management.mjs?v=6';
+import {installManagement} from './management-ui.mjs?v=3';
+import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=3';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=7';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
@@ -8,8 +8,8 @@ import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocumen
 import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
-import { filterTickets } from './ticket-report.mjs?v=3';
-import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=3';
+import { filterTickets } from './ticket-report.mjs?v=4';
+import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=4';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
 import { ticketNumberExists, ticketNumberConflicts, ticketConflictText, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=3';
@@ -193,7 +193,7 @@ function renderDashboard(){
   if(preset!=='custom'){const range=presetDates(preset);$('#dashboard-from').value=range.dateFrom;$('#dashboard-to').value=range.dateTo;}
   const filters={dateFrom:$('#dashboard-from').value,dateTo:$('#dashboard-to').value,jobId:jobSelect.value,dateBasis:$('#dashboard-date-basis').value};
   const invalid=filters.dateFrom&&filters.dateTo&&filters.dateFrom>filters.dateTo;
-  const t=filterTickets(state.tickets,filters);
+  const t=filterTickets(reportingTickets(state.tickets,state.management?.cases),filters);
   $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${totalDocuments(t)} ใบ · ${t.length} งาน · ${dateBasisLabel(filters.dateBasis)} (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
   $('#dashboard-scope').classList.toggle('error',!!invalid);
   $('#dashboard-total').textContent=qtyText(totalDocuments(t));
@@ -207,8 +207,8 @@ function renderDashboard(){
     const materialLines=t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done').reduce((sum,ticket)=>sum+(Array.isArray(ticket.materials)?ticket.materials.length:0),0);
     const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
     const closed=perf.done+perf.partial;
-    const picks=confirmedPickSummary(t.filter(ticket=>ticket.assignee_id===p.id));
-    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="quality-summary">ข้อมูลครบ ${quality.complete} งาน · หยิบผิดที่ระบุเหตุผล ${quality.pickingErrors} รายการ · ต้องตรวจเหตุผล ${quality.reviewNeeded} รายการ<br>เทียบมาตรฐาน: ${quality.efficiency===null?'ยังไม่มีงานที่ข้อมูลครบและมาตรฐานตรงกัน':quality.efficiency+'% จาก '+quality.matched+' งาน'}</p><p class="pick-summary">บันทึกแล้ว ${picks.confirmed} รายการ · เบิกขาด ${picks.short} รายการ · เบิกเกิน ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลาสุทธิมัธยฐาน</span></div></div></article>`;
+    const picks=confirmedPickSummary(own);const pendingVariances=varianceRows(own,state.management?.cases).filter(r=>r.status!=='resolved');picks.short=pendingVariances.filter(r=>r.delta<0).length;picks.over=pendingVariances.filter(r=>r.delta>0).length;
+    return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="quality-summary">ข้อมูลครบ ${quality.complete} งาน · หยิบผิดที่ระบุเหตุผล ${quality.pickingErrors} รายการ · ต้องตรวจเหตุผล ${quality.reviewNeeded} รายการ<br>เทียบมาตรฐาน: ${quality.efficiency===null?'ยังไม่มีงานที่ข้อมูลครบและมาตรฐานตรงกัน':quality.efficiency+'% จาก '+quality.matched+' งาน'}</p><p class="pick-summary">บันทึกแล้ว ${picks.confirmed} รายการ · ขาดที่ยังไม่จัดการ ${picks.short} รายการ · เกินที่ยังไม่จัดการ ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลาสุทธิมัธยฐาน</span></div></div></article>`;
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
   $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);renderAttention();
   const active=t.filter(x=>['queued','active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
@@ -250,7 +250,7 @@ function renderTicketFilterOptions(){
     select.value=previous;
   }
 }
-function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:state.tickets,{...ticketFilters(),status:['deleted','followup_complete'].includes($('#ticket-filter').value)?'':ticketFilters().status}).filter(t=>$('#ticket-filter').value!=='followup_complete'||followupComplete(t,state.management?.cases));}
+function selectedTickets(){return filterTickets($('#ticket-filter').value==='deleted'&&supervisor()?state.deletedTickets:reportingTickets(state.tickets,state.management?.cases),{...ticketFilters(),status:['deleted','followup_complete'].includes($('#ticket-filter').value)?'':ticketFilters().status}).filter(t=>$('#ticket-filter').value!=='followup_complete'||followupComplete(t,state.management?.cases)).filter(t=>ticketFilters().completeness!=='variance'||varianceRows([t],state.management?.cases).some(r=>r.status!=='resolved')).map(t=>state.tickets.find(original=>original.id===t.id)||t);}
 function rememberOpenMaterials(){
   $('#ticket-list').querySelectorAll('[data-material-ticket]').forEach(details=>{
     if(details.open)expandedTickets.add(details.dataset.materialTicket);
@@ -276,7 +276,7 @@ function reportFiltersText(filters){
   return parts.length?parts.join(' · '):'ทุกใบเบิก';
 }
 function populateReport(list,filters){
-  const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{if(ticket.status in counts)counts[ticket.status]+=ticketDocumentCount(ticket);});
+  const counts={queued:0,active:0,paused:0,done:0,partial:0,cancelled:0};list.forEach(ticket=>{const status=followupComplete(ticket,state.management?.cases)?'done':ticket.status;if(status in counts)counts[status]+=ticketDocumentCount(ticket);});
   const rows=list.map((ticket,index)=>{
     const materials=Array.isArray(ticket.materials)&&ticket.materials.length?`<strong>รายการวัสดุ</strong><div>${ticket.materials.map(line=>`<span>${line.source==='stock'?'[นอก BOM] ':''}${esc(line.pk_code)} ${esc(line.pk_name)}: ${qtyText(line.required_qty)} ${esc(line.unit)} · ${line.confirmed_at?`เบิกจริง ${qtyText(line.actual_qty)} · ${esc(pickVarianceText(line.required_qty,line.actual_qty,line.unit,qtyText))} ${esc(Math.abs(Math.round((line.actual_qty-Number(line.required_qty))*10000))>10000?line.short_reason||'':'')}`:'ยังไม่ยืนยันเบิกจริง'}</span>`).join('')}</div>`:'';
     const detail=materials||ticket.description||ticket.status_reason?`<tr class="report-materials"><td colspan="10">${materials}<p>${esc(pickCompleteness(ticket).label)}</p>${documentSummary(ticket)}${ticket.description?`<p><strong>หมายเหตุ:</strong> ${esc(ticket.description)}</p>`:''}${ticket.status_reason&&(!followupComplete(ticket,state.management?.cases)||ticket.materials?.some(l=>l.confirmed_at&&Math.abs(Math.round((l.actual_qty-Number(l.required_qty))*10000))>10000))?`<p><strong>เหตุผลสถานะ:</strong> ${esc(ticket.status_reason)}</p>`:''}</td></tr>`:'';
@@ -574,8 +574,8 @@ function documentSummary(ticket){
   return `<div class="document-summary">${rows.map(r=>`<span><strong>${esc(r.number)}</strong>: ${r.quantity===null?'ยังไม่ระบุจำนวนผลิตรายใบ':qtyText(r.quantity)+' FG'}</span>`).join('')}</div>`;
 }
 function renderAttention(){
-  const all=state.tickets;
-  const items=[['queued','รอเริ่ม',all.filter(t=>t.status==='queued').length,'all'],['active','กำลังทำ',all.filter(t=>t.status==='active').length,'all'],['paused','พัก/รอ',all.filter(t=>t.status==='paused').length,'all'],['partial','เบิกไม่ครบ',all.filter(t=>t.status==='partial').length,'all'],['all','ยอดเบิกจริงไม่ครบ',all.filter(t=>pickCompleteness(t).total&&!pickCompleteness(t).complete).length,'incomplete'],['all','มีขาด/เกิน',all.filter(t=>(t.materials||[]).some(l=>l.confirmed_at&&Math.abs(Math.round((l.actual_qty-Number(l.required_qty))*10000))>10000)).length,'variance']];
+  const all=reportingTickets(state.tickets,state.management?.cases);
+  const items=[['queued','รอเริ่ม',all.filter(t=>t.status==='queued').length,'all'],['active','กำลังทำ',all.filter(t=>t.status==='active').length,'all'],['paused','พัก/รอ',all.filter(t=>t.status==='paused').length,'all'],['partial','เบิกไม่ครบ',all.filter(t=>t.status==='partial').length,'all'],['all','ยอดเบิกจริงไม่ครบ',all.filter(t=>pickCompleteness(t).total&&!pickCompleteness(t).complete).length,'incomplete'],['all','มีขาด/เกิน',new Set(varianceRows(all,state.management?.cases).filter(r=>r.status!=='resolved').map(r=>r.ticket.id)).size,'variance']];
   $('#attention-list').innerHTML='<p>งานที่ต้องจัดการ · ทุกวันที่</p>'+items.map(([status,label,count,completeness])=>`<button class="attention-card" data-attention-status="${status}" data-attention-completeness="${completeness}" type="button"><span>${label}</span><strong>${count}</strong><small>งาน · เปิดรายการ →</small></button>`).join('');
 }
 document.addEventListener('click',e=>{

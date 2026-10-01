@@ -25,3 +25,5 @@ export function followupComplete(ticket,cases=[]){
  const rows=varianceRows([ticket],cases);
  return (rows.length>0||lines.some(l=>fractionalVariance(l.required_qty,l.actual_qty)))&&rows.every(r=>r.status==='resolved');
 }
+
+export function reportingTickets(tickets,cases=[]){return tickets.map(t=>followupComplete(t,cases)?{...t,status:'done',followup_resolved:true}:t);}
