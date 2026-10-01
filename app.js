@@ -1,6 +1,6 @@
 import {followupComplete,reportingTickets,varianceRows} from './management.mjs?v=6';
-import {installManagement} from './management-ui.mjs?v=3';
-import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=3';
+import {installManagement} from './management-ui.mjs?v=4';
+import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs?v=4';
 import { prepareStaffPhoto } from './staff-photo.mjs';
 import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=7';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
@@ -8,8 +8,8 @@ import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocumen
 import { presetDates } from './dashboard-filters.mjs';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.0/+esm';
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, PK_WMS_URL, PK_WMS_PUBLISHABLE_KEY } from './config.js';
-import { filterTickets } from './ticket-report.mjs?v=4';
-import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=4';
+import { filterTickets } from './ticket-report.mjs?v=5';
+import { automaticSkill, completedJobWorkload, personPerformance } from './skill-metrics.mjs?v=5';
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
 import { ticketNumberExists, ticketNumberConflicts, ticketConflictText, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=3';
@@ -203,9 +203,9 @@ function renderDashboard(){
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
   }),jobs=state.jobs.filter(j=>(j.active||j.id===jobId)&&(!jobId||j.id===jobId));
   $('#performance-list').innerHTML=people.length?people.map(p=>{
-    const own=t.filter(ticket=>ticket.assignee_id===p.id),quality=operationalPerformance(own,state.standards);const perf=personPerformance(p.id,t);
+    const own=t.filter(ticket=>ticket.assignee_id===p.id),quality=operationalPerformance(own,state.standards,state.management?.cases);const perf=personPerformance(p.id,t);
     const materialLines=t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done').reduce((sum,ticket)=>sum+(Array.isArray(ticket.materials)?ticket.materials.length:0),0);
-    const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:`${(perf.medianMinutes/60).toFixed(1)} ชม.`;
+    const time=perf.medianMinutes===null?'—':perf.medianMinutes<1?'<1 นาที':perf.medianMinutes<60?`${Math.round(perf.medianMinutes)} นาที`:minutesText(perf.medianMinutes);
     const closed=perf.done+perf.partial;
     const picks=confirmedPickSummary(own);const pendingVariances=varianceRows(own,state.management?.cases).filter(r=>r.status!=='resolved');picks.short=pendingVariances.filter(r=>r.delta<0).length;picks.over=pendingVariances.filter(r=>r.delta>0).length;
     return `<article class="performance-card"><div class="performance-person">${personPortrait(p,'performance-avatar')}<div><h4>${esc(p.display_name)}</h4><span>ได้รับ ${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id)))} ใบ · ${qtyText(perf.total)} งาน</span></div></div><div class="workload-summary"><div><strong>${qtyText(totalDocuments(t.filter(ticket=>ticket.assignee_id===p.id&&ticket.status==='done')))}</strong><span>ใบที่จบ (${perf.done} งาน)</span></div><div><strong>${qtyText(materialLines)}</strong><span>รายการวัสดุในใบที่จบ</span></div></div><p class="quality-summary">ข้อมูลครบ ${quality.complete} งาน · หยิบผิดที่ระบุเหตุผล ${quality.pickingErrors} รายการ · ต้องตรวจเหตุผล ${quality.reviewNeeded} รายการ<br>เทียบมาตรฐาน: ${quality.efficiency===null?'ยังไม่มีงานที่ข้อมูลครบและมาตรฐานตรงกัน':quality.efficiency+'% จาก '+quality.matched+' งาน'}</p><p class="pick-summary">บันทึกแล้ว ${picks.confirmed} รายการ · ขาดที่ยังไม่จัดการ ${picks.short} รายการ · เกินที่ยังไม่จัดการ ${picks.over} รายการ · ยังไม่ยืนยัน ${picks.unknown} รายการ</p><div class="performance-stats"><div><strong>${qtyText(perf.open)}</strong><span>งานที่ยังเปิด</span></div><div><strong>${qtyText(perf.partial)}</strong><span>งานเบิกไม่ครบ</span></div><div><strong>${perf.completionRate===null?'—':`${perf.completionRate}%`}</strong><span>อัตราจบงาน${closed?` (${qtyText(closed)} งาน)` : ''}</span></div><div><strong>${time}</strong><span>เวลาสุทธิมัธยฐาน</span></div></div></article>`;

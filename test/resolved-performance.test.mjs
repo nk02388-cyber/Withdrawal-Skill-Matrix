@@ -9,3 +9,11 @@ test('resolved shortages count as completed in performance without rewriting sto
  cases[0].status='open';assert.equal(personPerformance('p',reportingTickets([t],cases)).partial,1);
  cases[0].status='resolved';t.materials[0].confirmed_at='changed';assert.equal(personPerformance('p',reportingTickets([t],cases)).partial,1);
 });
+
+import {operationalPerformance} from '../operations.mjs';
+test('partially resolved tickets review only unresolved material reasons',()=>{
+ const t={id:'a',status:'partial',materials:[{pk_code:'A',required_qty:10,actual_qty:12,confirmed_at:'now'},{pk_code:'B',required_qty:10,actual_qty:8,confirmed_at:'now'}]};
+ const row=varianceRows([t])[0],cases=[{ticket_id:'a',line_index:0,fingerprint:row.fingerprint,status:'resolved'}];
+ assert.equal(operationalPerformance([t],[],cases).reviewNeeded,1);
+ cases[0].status='open';assert.equal(operationalPerformance([t],[],cases).reviewNeeded,2);
+});

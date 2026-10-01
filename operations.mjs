@@ -1,3 +1,4 @@
+import {varianceRows} from './management.mjs?v=6';
 const MINUTE=60000,DAY=86400000,OFFSET=7*3600000;
 let workSettings={start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[]};
 export function configureWorkTime(settings){workSettings={...workSettings,...settings};for(const [key,label] of Object.entries(settings.reasonNames||{}))if(key in reasonLabels&&typeof label==='string'&&label.trim())reasonLabels[key]=label;}
@@ -34,14 +35,15 @@ export function expectedMinutes(ticket,standards){
   if(!standard)return null;
   return Number(standard.setup_minutes)+Number(standard.minutes_per_line)*(ticket.materials?.length||0)+Number(standard.minutes_per_1000_fg)*Number(ticket.requested_qty||0)/1000;
 }
-export function operationalPerformance(tickets,standards){
+export function operationalPerformance(tickets,standards,cases=[]){
   let expected=0,actual=0,matched=0,complete=0,pickingErrors=0,reviewNeeded=0;
   const comparisons=[];
   for(const ticket of tickets){
     if(!['done','partial'].includes(ticket.status))continue;
     const info=pickCompleteness(ticket);
     if(!info.complete)continue;complete++;
-    for(const line of ticket.followup_resolved?[]:ticket.materials||[]){if(Math.abs(Math.round((line.actual_qty-Number(line.required_qty))*10000))<=10000)continue;if(line.reason_code==='picking_error')pickingErrors++;if(!line.reason_code||line.reason_code==='other')reviewNeeded++;}
+    const unresolved=new Set(varianceRows([ticket],cases).filter(r=>r.status!=='resolved').map(r=>r.index));
+    for(const [index,line] of (ticket.materials||[]).entries()){if(Math.abs(Math.round((line.actual_qty-Number(line.required_qty))*10000))<=10000)continue;if(line.reason_code==='picking_error')pickingErrors++;if(unresolved.has(index)&&!ticket.followup_resolved&&(!line.reason_code||line.reason_code==='other'))reviewNeeded++;}
     const duration=workBreakdown(ticket),target=expectedMinutes(ticket,standards);
     if(ticket.status==='done'&&duration?.activeMinutes>0&&target>0){expected+=target;actual+=duration.activeMinutes;matched++;comparisons.push({ticket_no:ticket.ticket_no,target,actual:duration.activeMinutes});}
   }
