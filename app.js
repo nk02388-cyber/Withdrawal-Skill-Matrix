@@ -198,8 +198,10 @@ function renderDashboard(){
   const t=filterTickets(reportingTickets(state.tickets,state.management?.cases),filters);
   $('#dashboard-scope').textContent=invalid?'วันที่เริ่มต้องไม่เกินวันที่สิ้นสุด':`พบ ${totalDocuments(t)} ใบ · ${t.length} งาน · ${dateBasisLabel(filters.dateBasis)} (เวลาไทย): ${filters.dateFrom||'ไม่จำกัด'} ถึง ${filters.dateTo||'ไม่จำกัด'} · ${filters.jobId?jobFor(filters.jobId):'ทุกประเภทงาน'} · ใช้กับทุกส่วนในภาพรวมและระดับประสบการณ์ / ระดับหัวหน้าประเมินเป็นค่าล่าสุด`;
   $('#dashboard-scope').classList.toggle('error',!!invalid);
-  $('#dashboard-total').textContent=qtyText(totalDocuments(t));
-  $('#metrics').innerHTML=[['queued','รอดำเนินการ'],['active','กำลังทำ'],['paused','พักงาน'],['done','เสร็จแล้ว'],['partial','เบิกไม่ครบ'],['cancelled','ยกเลิก']].map(([status,label])=>`<button type="button" data-metric-status="${status}" class="metric metric-${status}"><div class="metric-label"><span class="metric-dot" aria-hidden="true"></span>${label}</div><div class="metric-value">${qtyText(totalDocuments(t.filter(x=>x.status===status)))}</div><div class="hint">${t.filter(x=>x.status===status).length} งาน</div></button>`).join('');
+  $('#dashboard-total').textContent=`${qtyText(t.length)} งาน · ${qtyText(totalDocuments(t))} ใบ`;
+  const statusGroups=[['done','เบิกครบแล้ว',t.filter(x=>x.status==='done')],['partial','จบงานแล้ว แต่ยังเบิกไม่ครบ',t.filter(x=>x.status==='partial')],['open','ยังไม่จบงาน',t.filter(x=>['queued','active','paused'].includes(x.status))]];
+  const cancelled=t.filter(x=>x.status==='cancelled');if(cancelled.length)statusGroups.push(['cancelled','ยกเลิก',cancelled]);
+  $('#metrics').innerHTML=statusGroups.map(([status,label,rows])=>`<button type="button" data-metric-status="${status}" class="metric metric-${status}"><div class="metric-label">${label}</div><div class="metric-value">${qtyText(rows.length)} <small>งาน</small></div><div class="hint">${qtyText(totalDocuments(rows))} ใบเบิก · ดูรายการ →</div></button>`).join('');
   const people=state.people.filter(p=>p.active).sort((a,b)=>{
     const ai=featuredOrder.indexOf(a.id),bi=featuredOrder.indexOf(b.id);
     return (ai<0?Infinity:ai)-(bi<0?Infinity:bi)||a.display_name.localeCompare(b.display_name,'th');
@@ -222,6 +224,7 @@ function renderDashboard(){
   }).join(''):empty('ยังไม่มีพนักงานที่เปิดใช้งาน');
   $('#matrix').innerHTML=renderExperienceMatrix(people,jobs,t);renderAttention();
   const active=t.filter(x=>['queued','active','paused'].includes(x.status)).sort((a,b)=>Date.parse(b.started_at||b.created_at)-Date.parse(a.started_at||a.created_at)).slice(0,5);
+  $('.dashboard-queue-panel').hidden=!active.length;
   $('#active-list').innerHTML=active.length?active.map(ticket=>`<div class="dashboard-queue-item"><span class="queue-status ${esc(ticket.status)}">${esc(statusLabels[ticket.status])}</span><div class="queue-details"><strong>${esc(ticket.ticket_no)}</strong><span>${esc(jobFor(ticket.job_type_id))} · ${esc(nameFor(ticket.assignee_id))}</span></div><time>${esc(fmt(ticket.started_at))}</time></div>`).join(''):`<div class="dashboard-queue-empty"><strong>ไม่มีงานรอเริ่ม กำลังทำ หรือพักอยู่</strong><span>งานที่ยังเปิดจะแสดงที่นี่</span></div>`;
 }
 function ticketHtml(t){
@@ -585,8 +588,10 @@ function documentSummary(ticket){
 }
 function renderAttention(){
   const all=reportingTickets(state.tickets,state.management?.cases);
-  const items=[['queued','รอเริ่ม',all.filter(t=>t.status==='queued').length,'all'],['active','กำลังทำ',all.filter(t=>t.status==='active').length,'all'],['paused','พัก/รอ',all.filter(t=>t.status==='paused').length,'all'],['partial','เบิกไม่ครบ',all.filter(t=>t.status==='partial').length,'all'],['all','ยอดเบิกจริงไม่ครบ',all.filter(t=>pickCompleteness(t).total&&!pickCompleteness(t).complete).length,'incomplete'],['all','มีขาด/เกิน',new Set(varianceRows(all,state.management?.cases).filter(r=>r.status!=='resolved').map(r=>r.ticket.id)).size,'variance']];
-  $('#attention-list').innerHTML='<p>งานที่ต้องจัดการ · ทุกวันที่</p>'+items.map(([status,label,count,completeness])=>`<button class="attention-card" data-attention-status="${status}" data-attention-completeness="${completeness}" type="button"><span>${label}</span><strong>${count}</strong><small>งาน · เปิดรายการ →</small></button>`).join('');
+  const pending=varianceRows(all,state.management?.cases).filter(r=>r.status!=='resolved');
+  const items=[['all','ยังบันทึกยอดเบิกจริงไม่ครบ',all.filter(t=>t.status!=='cancelled'&&pickCompleteness(t).total&&!pickCompleteness(t).complete).length,'incomplete'],['all','มีวัสดุขาดที่ยังไม่จัดการ',new Set(pending.filter(r=>r.delta<0).map(r=>r.ticket.id)).size,'short_pending'],['all','มีวัสดุเกินที่ยังไม่จัดการ',new Set(pending.filter(r=>r.delta>0).map(r=>r.ticket.id)).size,'over_pending']].filter(([, ,count])=>count>0);
+  $('#attention-list').hidden=!items.length;
+  $('#attention-list').innerHTML='<p>เรื่องที่ต้องติดตาม · ทุกวันที่ (ไม่จำกัดตามตัวกรองด้านบน)</p>'+items.map(([status,label,count,completeness])=>`<button class="attention-card" data-attention-status="${status}" data-attention-completeness="${completeness}" type="button"><span>${label}</span><strong>${count} งาน</strong><small>เปิดใบเบิก →</small></button>`).join('')+'<p class="attention-note">งานเดียวอาจมีทั้งขาดและเกิน จึงไม่ควรบวกยอดติดตามเข้าด้วยกัน</p>';
 }
 document.addEventListener('click',e=>{
   const attention=e.target.closest('[data-attention-status]');
