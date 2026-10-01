@@ -11,7 +11,7 @@ test('automatic closure handles mixed shortages and excess, independent of entry
  const m=[{required_qty:49.92},{required_qty:2.88}],p=[{actual_qty:50,short_reason:'ปัดเศษ'},{actual_qty:2.88}];
  assert.equal(automaticPickCloseStatus(m,p,'partial'),'done');
  assert.equal(pickError(m,p,automaticPickCloseStatus(m,p,'partial')),'');
- p[1]={actual_qty:2,short_reason:'ของขาด'};
+ p[1]={actual_qty:1.88,short_reason:'ของขาด'};
  assert.equal(automaticPickCloseStatus(m,p,'done'),'partial');
  assert.equal(pickError(m,p,automaticPickCloseStatus(m,p,'done')),'');
  assert.equal(automaticPickCloseStatus(m,p,null),null);

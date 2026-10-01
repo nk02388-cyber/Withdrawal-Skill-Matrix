@@ -1,3 +1,4 @@
+import {significantShortage} from './pick-tolerance.mjs';
 export function pickError(materials,picks,closeStatus=null) {
   if(!materials.length || picks.length!==materials.length) return 'กรุณายืนยันให้ครบทุกรายการ';
   let shortages=0;
@@ -6,7 +7,7 @@ export function pickError(materials,picks,closeStatus=null) {
     if(typeof actual!=='number'||!Number.isFinite(actual)||actual<0||actual>1000000000||Math.abs(actual*10000-Math.round(actual*10000))>0.001) return `รายการ ${i+1}: ใส่จำนวนตั้งแต่ 0 ถึง 1,000,000,000 ทศนิยมไม่เกิน 4 ตำแหน่ง`;
     const reason=String(p.short_reason||'').trim();
     if(reason.length>1000) return `รายการ ${i+1}: เหตุผลยาวเกิน 1,000 ตัวอักษร`;
-    if(actual<required)shortages++;
+    if(significantShortage(required,actual))shortages++;
     if(actual!==required&&!reason)return `รายการ ${i+1}: กรุณาระบุเหตุผลที่เบิกขาดหรือเกิน`;
   }
   if(closeStatus==='done'&&shortages) return 'มีรายการขาด กรุณาเลือกปิดเป็นเบิกไม่ครบ';
@@ -44,5 +45,5 @@ export function defaultPickActual(line){
 }
 export function automaticPickCloseStatus(materials,picks,requested){
  if(!requested)return null;
- return materials.some((line,i)=>typeof picks[i]?.actual_qty==='number'&&picks[i].actual_qty<Number(line.required_qty))?'partial':'done';
+ return materials.some((line,i)=>typeof picks[i]?.actual_qty==='number'&&significantShortage(line.required_qty,picks[i].actual_qty))?'partial':'done';
 }

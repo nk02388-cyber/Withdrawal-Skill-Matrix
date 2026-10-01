@@ -1,8 +1,8 @@
-import {followupComplete} from './management.mjs?v=2';
+import {followupComplete} from './management.mjs?v=3';
 import {installManagement} from './management-ui.mjs';
 import {workBreakdown,minutesText,pickCompleteness,operationalPerformance,reasonLabels,documentsError} from './operations.mjs';
 import { prepareStaffPhoto } from './staff-photo.mjs';
-import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=4';
+import { pickError, confirmedPickSummary, actualFromInput, pickVarianceText, convertPickMode, defaultPickActual, automaticPickCloseStatus } from './picking.mjs?v=5';
 import { saveErrorText, createSaveGate } from './ui-feedback.mjs';
 import { splitTicketNumbers, ticketReferences, ticketDocumentCount, totalDocuments, ticketNumbersError } from './withdrawal-documents.mjs';
 import { presetDates } from './dashboard-filters.mjs';
@@ -234,9 +234,9 @@ function ticketHtml(t){
   actions+=button('history','ประวัติ');
   const timing=workBreakdown(t),completion=pickCompleteness(t);const duration=timing?`<br>ทำงานสุทธิ ${minutesText(timing.activeMinutes)}<br>พักในกะ ${minutesText(timing.waitingMinutes)} · รวม ${minutesText(timing.totalMinutes)}`:'';
   const varianceLines=(t.materials||[]).filter(line=>line.confirmed_at&&typeof line.actual_qty==='number'&&Math.round((line.actual_qty-Number(line.required_qty))*10000)!==0);
-  const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>${resolved?'ประวัติขาด–เกิน · จัดการแล้ว':'รายการเบิกขาดหรือเกิน'} · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
+  const variance=varianceLines.length?`<section class="ticket-variance" aria-label="รายการเบิกขาดหรือเกิน"><h5>${resolved?'ประวัติส่วนต่าง · เบิกครบ':'รายการเบิกขาดหรือเกิน'} · ${varianceLines.length} รายการ</h5>${materialTable(varianceLines)}</section>`:'';
   const bom=`${t.fg_code?`<div class="ticket-fg"><strong>${esc(t.fg_code)} · ${esc(t.fg_name)}</strong><span>จำนวน ${qtyText(t.requested_qty)} FG</span></div>`:''}${Array.isArray(t.materials)&&t.materials.length?`<details class="ticket-materials" data-material-ticket="${esc(t.id)}"${expandedTickets.has(t.id)?' open':''}><summary>ดูรายการเบิก ${t.materials.length} รายการ${t.materials.some(line=>line.source==='stock')?' · มีรายการนอก BOM':''}</summary>${materialTable(t.materials)}</details>`:''}`;
-  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div><div class="data-completeness ${completion.complete?'complete':'incomplete'}">${esc(completion.label)}</div>${documentSummary(t)}${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>${resolved?'เหตุผลตอนจบงาน:':'เหตุผล:'}</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(resolved?'done':t.status)}">${t.deleted_at?'ลบแล้ว':status}</span>${resolved?'<p class="hint">จัดการผลติดตามครบแล้ว<br>ยอดเบิกเดิมเก็บเป็นประวัติ</p>':''}<div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
+  return `<article class="ticket"><div class="ticket-main"><div class="ticket-code">${esc(t.ticket_no)}</div><div class="ticket-document-count">${ticketDocumentCount(t)} ใบ · 1 งาน${ticketDocumentCount(t)>1?' · เวลาเริ่ม–จบชุดเดียว':''}</div><h4>${esc(jobFor(t.job_type_id))}</h4><div class="ticket-meta">${esc(nameFor(t.assignee_id))} · สร้าง ${fmt(t.created_at)}</div><div class="data-completeness ${completion.complete?'complete':'incomplete'}">${esc(completion.label)}</div>${documentSummary(t)}${bom}${variance}${t.description?`<p class="ticket-detail">${esc(t.description)}</p>`:''}${t.status_reason?`<p class="ticket-reason"><strong>${resolved?'เหตุผลตอนจบงาน:':'เหตุผล:'}</strong> ${esc(t.status_reason)}</p>`:''}</div><div class="ticket-right"><span class="status ${esc(resolved?'done':t.status)}">${t.deleted_at?'ลบแล้ว':status}</span>${resolved?'<p class="hint">ส่วนต่างน้อยกว่า 1 หน่วย หรือจัดการติดตามครบแล้ว<br>ยอดเบิกเดิมเก็บเป็นประวัติ</p>':''}<div class="ticket-time">เริ่ม ${fmt(t.started_at)}<br>จบ ${fmt(t.ended_at)}${duration}</div><div class="ticket-actions">${actions}</div></div></article>`;
 }
 function ticketFilters(){return {query:$('#ticket-search').value,assigneeId:$('#ticket-person-filter').value,jobId:$('#ticket-job-filter').value,status:$('#ticket-filter').value==='all'?'':$('#ticket-filter').value,dateFrom:$('#ticket-date-from').value,dateTo:$('#ticket-date-to').value,dateBasis:$('#ticket-date-basis').value,completeness:$('#ticket-completeness').value};}
 function setSelectOptions(select,html){if(select.dataset.optionsHtml!==html){select.innerHTML=html;select.dataset.optionsHtml=html;}}
@@ -516,7 +516,7 @@ function updatePickClosure(){
  const p=pendingPicks,summary=$('#pick-close-summary');summary.hidden=!p?.closeStatus&&!(p?.supervisorEdit&&['done','partial'].includes(p.status));
  if(summary.hidden)return;
  const picks=p.materials.map((_,i)=>({actual_qty:readPickActual(i)})),status=automaticPickCloseStatus(p.materials,picks,'done');
- summary.textContent='สถานะปิดงานอัตโนมัติ: '+(status==='partial'?'เบิกไม่ครบ — มีรายการขาด':'เสร็จแล้ว — ไม่มีรายการขาด');
+ summary.textContent='สถานะปิดงานอัตโนมัติ: '+(status==='partial'?'เบิกไม่ครบ — มีรายการขาด':'เบิกครบ — ไม่มีรายการขาดตั้งแต่ 1 หน่วยขึ้นไป');
  if(!p.supervisorEdit)$('#pick-save').textContent=status==='partial'?'บันทึกและปิดเป็นเบิกไม่ครบ':'บันทึกและจบงาน';
 }
 $('#pick-lines').addEventListener('input',updatePickShorts);

@@ -1,3 +1,4 @@
+import {fractionalVariance} from './pick-tolerance.mjs';
 export const defaultSettings={start:'08:00',end:'17:00',lunchStart:'12:00',lunchEnd:'13:00',holidays:[],exceptionOwnerName:'สองนคร กรียินดี'};
 export function settingsError(s){
  const times=['start','end','lunchStart','lunchEnd'].map(k=>s[k]);
@@ -11,7 +12,7 @@ export function varianceRows(tickets,cases=[]){return tickets.filter(t=>!t.delet
  const delta=Math.round((l.actual_qty-Number(l.required_qty))*10000)/10000;if(!delta)return [];
  const fingerprint=JSON.stringify([l.pk_code,Number(l.required_qty),l.actual_qty,l.confirmed_at]);
  const saved=cases.find(c=>c.ticket_id===t.id&&c.line_index===i);
- return [{ticket:t,line:l,index:i,delta,fingerprint,case:saved,status:saved?.fingerprint===fingerprint?saved.status:'open',stale:!!saved&&saved.fingerprint!==fingerprint}];
+ return [{ticket:t,line:l,index:i,delta,fingerprint,case:saved,fractional:fractionalVariance(l.required_qty,l.actual_qty),status:fractionalVariance(l.required_qty,l.actual_qty)?'resolved':saved?.fingerprint===fingerprint?saved.status:'open',stale:!!saved&&saved.fingerprint!==fingerprint}];
  }));}
 export function matchesText(values,query){const words=String(query).trim().toLocaleLowerCase('th').split(/\s+/).filter(Boolean),hay=values.join(' ').toLocaleLowerCase('th');return words.every(w=>hay.includes(w));}
 export function safeCsv(rows){return '\ufeff'+rows.map(row=>row.map(v=>'"'+String(v??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');}
