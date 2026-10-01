@@ -1,0 +1,36 @@
+begin;
+do $$ declare qa_id uuid:=gen_random_uuid(); refs text:='QA-PURGE-'||left(qa_id::text,18)||', QA-PURGE-B-'||left(qa_id::text,18); t public.tickets%rowtype; args jsonb; blocked boolean;begin
+ update public.app_settings set value='qa-purge-rollback' where key='supervisor_username';
+ update public.app_settings set value=extensions.crypt('qa-purge-only',extensions.gen_salt('bf')) where key='supervisor_code';
+ insert into public.tickets(id,ticket_no,job_type_id,assignee_id,status) values(qa_id,refs,(select id from public.job_types where active limit 1),(select id from public.staff where active limit 1),'queued');
+ args:=jsonb_build_object('p_ticket_id',qa_id,'p_expected_deleted_at',null,'p_confirm_number',refs,'p_reason','ทดสอบ rollback');
+ blocked:=false;
+ begin perform public.perform_work_action('qa-purge-rollback','qa-purge-only','supervisor',null,'purge_ticket_as_supervisor',args);exception when others then if sqlerrm like 'ลบถาวรได้เฉพาะ%' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'FAIL active purge';end if;
+ blocked:=false;
+ begin perform public.perform_work_action('qa-purge-rollback','qa-purge-only','operator',null,'purge_ticket_as_supervisor',args);exception when others then if sqlerrm like 'สิทธิ์ไม่ตรง%' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'FAIL operator purge';end if;
+ perform public.perform_work_action('qa-purge-rollback','qa-purge-only','supervisor',null,'set_ticket_deleted_as_supervisor',jsonb_build_object('p_ticket_id',qa_id,'p_reason','ทดสอบ rollback','p_deleted',true));
+ select * into t from public.tickets where id=qa_id;
+ blocked:=false;
+ begin perform public.perform_work_action('qa-purge-rollback','qa-purge-only','supervisor',null,'purge_ticket_as_supervisor',args);exception when others then if sqlerrm like 'ข้อมูลถังขยะเปลี่ยน%' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'FAIL stale purge';end if;
+ args:=args||jsonb_build_object('p_expected_deleted_at',t.deleted_at,'p_confirm_number','wrong');
+ blocked:=false;
+ begin perform public.perform_work_action('qa-purge-rollback','qa-purge-only','supervisor',null,'purge_ticket_as_supervisor',args);exception when others then if sqlerrm like 'พิมพ์เลขที่%' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'FAIL wrong confirmation';end if;
+ args:=args||jsonb_build_object('p_confirm_number',refs);
+ perform set_config('qa.purge_args',args::text,true);
+ perform set_config('qa.purge_id',qa_id::text,true);
+ perform set_config('qa.purge_refs',refs,true);
+end $$;
+set local role anon;
+select public.perform_work_action('qa-purge-rollback','qa-purge-only','supervisor',null,'purge_ticket_as_supervisor',current_setting('qa.purge_args')::jsonb);
+reset role;
+do $$ declare qa_id uuid:=current_setting('qa.purge_id')::uuid;begin
+ if exists(select 1 from public.tickets where id=qa_id) or exists(select 1 from public.ticket_events where ticket_id=qa_id) or exists(select 1 from public.withdrawal_document_numbers where ticket_id=qa_id) then raise exception 'FAIL purge cleanup';end if;
+ insert into public.tickets(ticket_no,job_type_id,assignee_id,status) values(current_setting('qa.purge_refs'),(select id from public.job_types where active limit 1),(select id from public.staff where active limit 1),'queued');
+ if has_function_privilege('anon','public.purge_ticket_as_supervisor(text,text,uuid,timestamptz,text,text)','execute') then raise exception 'FAIL direct purge access';end if;
+end $$;
+rollback;
+select 'Trash-only removal, supervisor access, stale screen, typed confirmation, event cleanup, grouped number reuse and anon wrapper passed; all tests rolled back' as result;

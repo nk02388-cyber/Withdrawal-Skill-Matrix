@@ -11,6 +11,7 @@ import { automaticSkill, completedJobWorkload, personPerformance } from './skill
 import { matchesKeywords, searchStock } from './stock-search.mjs';
 import { formatBangkokClock, formatBangkokDateTime, fromBangkokInput, timeEditError, toBangkokInput } from './ticket-time.mjs?v=2';
 import { ticketNumberExists, ticketNumberConflicts, ticketConflictText, suggestTicketNumber, isDuplicateTicketNumberError } from './ticket-number.mjs?v=3';
+import { purgeConfirmationError } from './trash.mjs';
 
 const $ = s => document.querySelector(s);
 const esc = v => String(v ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -155,7 +156,7 @@ function updateMode(){
   document.querySelectorAll('.admin-only').forEach(el=>el.hidden=!supervisor());
   $('#user-label').textContent=supervisor()?`หัวหน้า · ${state.username}`:operator()?`ผู้ทำรายการ · ${nameFor(state.actorId)}`:'โหมดดูข้อมูล';
   $('#edit-btn').textContent=editing()?'ออกจากโหมด':'เข้าสู่โหมดทำงาน';
-  if(!supervisor()&&['people','settings'].includes(state.view))showView('dashboard');
+  if(!supervisor()&&['people','settings','trash'].includes(state.view))showView('dashboard');
   const trash=$('#ticket-filter option[value=deleted]');if(trash)trash.remove();
   if(supervisor())$('#ticket-filter').insertAdjacentHTML('beforeend','<option value="deleted">ถังขยะ (หัวหน้า)</option>');
   else {state.deletedTickets=[];if($('#ticket-filter').value==='deleted')$('#ticket-filter').value='all';}
@@ -173,7 +174,7 @@ async function load(silent=false){
   syncLabel(`อัปเดต ${formatBangkokClock(Date.now())} น. (เวลาไทย)`,true);
   render();
 }
-function render(){renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();}}
+function render(){renderDashboard();renderTickets();if(supervisor()){renderPeople();renderSettings();renderTrash();}}
 function renderExperienceMatrix(people,jobs,tickets){
   if(!people.length||!jobs.length)return empty('ยังไม่มีพนักงานหรือประเภทงาน เข้าสู่โหมดหัวหน้าเพื่อเริ่มบันทึก');
   return `<table class="matrix"><thead><tr><th>พนักงาน</th>${jobs.map(job=>`<th>${esc(job.name)}</th>`).join('')}</tr></thead><tbody>${people.map(person=>`<tr><td><div class="matrix-person">${personPortrait(person)}<span class="person-name">${esc(person.display_name)}</span></div></td>${jobs.map(job=>{
@@ -221,7 +222,7 @@ function ticketHtml(t){
     if(t.status==='active')actions+=button('pause','พักงาน')+button('partial','เบิกไม่ครบ')+button('finish','จบงาน',true);
     if(t.status==='paused')actions+=button('resume','ทำงานต่อ',true)+button('partial','เบิกไม่ครบ');
   }
-  if(supervisor()&&t.deleted_at){actions+=button('restore','กู้คืน');}
+  if(supervisor()&&t.deleted_at){actions+=button('restore','กู้คืน')+button('purge','ลบถาวร');}
   if(supervisor()&&!t.deleted_at){
     actions+=button('edit','แก้ไข')+button('delete','ลบ');
     if(['active','paused','done','partial'].includes(t.status)&&t.materials?.length)actions+=button('edit-picks','แก้ไขเบิกจริง');
@@ -333,11 +334,12 @@ async function openHistory(ticket){
 document.addEventListener('click',async e=>{
   const editPerson=e.target.closest('[data-edit-person]');if(editPerson&&supervisor()){const person=state.people.find(p=>p.id===editPerson.dataset.editPerson);if(person){$('#staff-edit-form [name=staff_id]').value=person.id;$('#staff-edit-form [name=name]').value=person.display_name;$('#staff-edit-message').textContent='';$('#staff-edit-dialog').showModal();}return;}
   const removeStock=e.target.closest('[data-remove-stock]');if(removeStock){state.stockLines.splice(Number(removeStock.dataset.removeStock),1);renderStockLines();return;}
-  const nav=e.target.closest('#nav button[data-view]');if(nav){showView(nav.dataset.view);return;}
+  const nav=e.target.closest('#nav button[data-view]');if(nav){if(nav.dataset.view==='trash'&&!supervisor())return;showView(nav.dataset.view);return;}
   if(e.target.closest('[data-dashboard-tickets]')){$('#ticket-date-basis').value=$('#dashboard-date-basis').value;$('#ticket-date-from').value=$('#dashboard-from').value;$('#ticket-date-to').value=$('#dashboard-to').value;$('#ticket-job-filter').value=$('#dashboard-job').value;$('#ticket-search').value='';$('#ticket-person-filter').value='';$('#ticket-filter').value='all';$('#ticket-completeness').value='all';renderTickets();showView('tickets');return;}
   const action=e.target.closest('button[data-action]');if(action){
     const kind=action.dataset.action,ticket=[...state.tickets,...state.deletedTickets].find(t=>t.id===action.dataset.id);
     if(!ticket)return;
+    if(kind==='purge'&&supervisor()){openPurge(ticket);return;}
     if(operator()&&['picks','finish','partial'].includes(kind)&&ticket.materials?.length){openPicks(ticket,kind==='finish'?'done':kind==='partial'?'partial':null);return;}
     if(kind==='edit-picks'&&supervisor()){openPicks(ticket,null,true);return;}
     if(kind==='history'){await openHistory(ticket);return;}
@@ -420,7 +422,8 @@ $('#ticket-no-existing').addEventListener('click',e=>{
   const button=e.currentTarget;$('#ticket-dialog').close();
   $('#ticket-search').value=button.dataset.number;$('#ticket-filter').value=button.dataset.deleted==='true'?'deleted':'all';
   $('#ticket-person-filter').value='';$('#ticket-job-filter').value='';$('#ticket-date-from').value='';$('#ticket-date-to').value='';$('#ticket-completeness').value='all';
-  showView('tickets');renderTickets();
+  if(button.dataset.deleted==='true'){$('#trash-search').value=button.dataset.number;renderTrash();showView('trash');}
+  else {showView('tickets');renderTickets();}
 });
 $('#bom-results').addEventListener('click',e=>{
   const choice=e.target.closest('[data-bom-choice]');
@@ -581,3 +584,24 @@ function renderStandards(){
 }
 document.addEventListener('click',e=>{const b=e.target.closest('[data-edit-standard]');if(!b)return;const s=state.standards.find(s=>s.job_type_id===b.dataset.editStandard&&s.fg_code===b.dataset.standardFg),f=$('#standard-form');f.elements.job_id.value=s.job_type_id;f.elements.fg_code.value=s.fg_code;f.elements.setup.value=s.setup_minutes;f.elements.line.value=s.minutes_per_line;f.elements.fg.value=s.minutes_per_1000_fg;f.elements.setup.focus();});
 $('#standard-form').addEventListener('submit',async e=>{e.preventDefault();if(!supervisor())return;const f=e.target,button=f.querySelector('[type=submit]'),values=['setup','line','fg'].map(key=>Number(f.elements[key].value));if(values.some(v=>!Number.isFinite(v)||v<0)||values.reduce((a,b)=>a+b,0)<=0){$('#standard-message').textContent='กำหนดเวลามาตรฐานอย่างน้อยหนึ่งช่องมากกว่า 0';return;}button.disabled=true;try{await mutate('set_work_standard_as_supervisor',{p_job_id:f.elements.job_id.value,p_fg_code:f.elements.fg_code.value.trim(),p_setup:values[0],p_line:values[1],p_fg:values[2]},'บันทึกเวลามาตรฐานแล้ว','#standard-message');}finally{button.disabled=false;}});
+let pendingPurge=null;
+function renderTrash(){
+  if(!supervisor())return;
+  $('#trash-list').querySelectorAll('[data-material-ticket]').forEach(details=>{if(details.open)expandedTickets.add(details.dataset.materialTicket);else expandedTickets.delete(details.dataset.materialTicket);});
+  const query=$('#trash-search').value.trim().toLocaleLowerCase();
+  const list=state.deletedTickets.filter(t=>[t.ticket_no,nameFor(t.assignee_id),jobFor(t.job_type_id)].join(' ').toLocaleLowerCase().includes(query));
+  $('#trash-count').textContent=`${list.length} งาน · ${totalDocuments(list)} ใบ`;
+  $('#trash-list').innerHTML=list.length?list.map(ticketHtml).join(''):empty(query?'ไม่พบใบเบิกในถังขยะตามคำค้น':'ถังขยะว่าง');
+}
+function openPurge(ticket){
+  pendingPurge={...ticket};$('#purge-form').reset();$('#purge-message').textContent='';$('#purge-ticket').textContent=`ใบเบิก ${ticket.ticket_no}`;$('#purge-dialog').showModal();
+}
+$('#trash-search').addEventListener('input',renderTrash);
+$('#purge-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!supervisor()||!pendingPurge)return;
+  const form=e.currentTarget,ticket=pendingPurge,confirmation=form.elements.confirmation.value,reason=form.elements.reason.value.trim();
+  const error=purgeConfirmationError(ticket,confirmation,reason);if(error){$('#purge-message').textContent=error;return;}
+  const button=form.querySelector('[type=submit]');button.disabled=true;
+  try{if(await mutate('purge_ticket_as_supervisor',{p_ticket_id:ticket.id,p_expected_deleted_at:ticket.deleted_at,p_confirm_number:confirmation.trim(),p_reason:reason},'ลบถาวรแล้ว เลขใบเบิกกลับมาใช้ใหม่ได้','#purge-message')){$('#purge-dialog').close();pendingPurge=null;expandedTickets.delete(ticket.id);}}
+  finally{button.disabled=false;}
+});

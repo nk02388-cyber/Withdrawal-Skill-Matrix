@@ -2,17 +2,19 @@
 const http=require('http'),fs=require('fs'),path=require('path');const root=path.resolve(__dirname,'..'),port=8770;
 const one={pk_code:'PK-TEST',pk_name:'วัสดุทดสอบ',unit:'ชิ้น',qty_per_unit:1,required_qty:3000};
 const person='11111111-1111-4111-8111-111111111111',job='22222222-2222-4222-8222-222222222222';
+let trashPurged=false;
 const data={people:[{id:person,display_name:'ผู้ทำรายการทดสอบ',active:true}],jobs:[{id:job,name:'เบิกทดสอบ',active:true}],skills:[],standards:[],tickets:[{id:'33333333-3333-4333-8333-333333333333',ticket_no:'TEST-001,TEST-002',job_type_id:job,assignee_id:person,status:'done',fg_code:'FG-TEST',fg_name:'สูตรทดสอบ',requested_qty:3000,bom_version:'a'.repeat(64),created_at:'2026-09-29T08:00:00+07:00',started_at:'2026-09-30T11:00:00+07:00',ended_at:'2026-09-30T14:00:00+07:00',pause_intervals:[{start:'2026-09-30T11:30:00+07:00',end:'2026-09-30T13:30:00+07:00'}],documents:[{number:'TEST-001',quantity:null},{number:'TEST-002',quantity:null}],materials:[{...one}]}]};
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname.startsWith('/rest/v1/rpc/')){let body='';req.on('data',c=>body+=c);req.on('end',()=>{const a=JSON.parse(body||'{}'),name=url.pathname.split('/').pop();let response;
   if(name==='verify_role_code')response=a.p_username==='qa'&&a.p_code==='qa';
   else if(name==='get_dashboard_state')response=data;
-  else if(name==='get_deleted_tickets_as_supervisor')response=process.env.QA_TRASH_CONFLICT==='1'?[{...data.tickets[0],id:'44444444-4444-4444-8444-444444444444',ticket_no:'PK2610-0035',status:'cancelled',deleted_at:'2026-09-30T06:48:34Z',documents:[],materials:[]}]:[];
+  else if(name==='get_deleted_tickets_as_supervisor')response=process.env.QA_TRASH_CONFLICT==='1'&&!trashPurged?[{...data.tickets[0],id:'44444444-4444-4444-8444-444444444444',ticket_no:'PK2610-0035',status:'cancelled',deleted_at:'2026-09-30T06:48:34Z',documents:[],materials:[]}]:[];
   else if(name==='get_ticket_history')response=[];
   else if(name==='get_withdrawal_stock_catalog')response={snapshot_id:1,report_date:'fixture',snapshot_saved_at:new Date().toISOString(),items:[]};
   else if(name==='perform_work_action'){
    const args=a.p_args,t=data.tickets[0];
+   if(a.p_action==='purge_ticket_as_supervisor')trashPurged=true;
    if(a.p_action==='edit_ticket_with_times_as_supervisor'){t.documents=args.p_documents;t.requested_qty=args.p_requested_qty;t.materials=t.materials.map(l=>({...l,required_qty:t.requested_qty}));}
    if(a.p_action==='edit_ticket_picks_as_supervisor'){t.materials=t.materials.map((l,i)=>({...l,...args.p_picks[i],confirmed_at:new Date().toISOString()}));t.status=t.materials.some(l=>l.actual_qty<l.required_qty)?'partial':'done';}
    if(a.p_action==='set_work_standard_as_supervisor')data.standards=[{job_type_id:args.p_job_id,fg_code:args.p_fg_code,setup_minutes:args.p_setup,minutes_per_line:args.p_line,minutes_per_1000_fg:args.p_fg}];
