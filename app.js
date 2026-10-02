@@ -1,3 +1,4 @@
+import {formulaDraft,mergeFormulas} from './saved-formulas.mjs?v=1';
 import {withdrawalTimePerformance,MINUTES_PER_DOCUMENT} from './time-performance.mjs?v=1';
 import {followupComplete,reportingTickets,varianceRows} from './management.mjs?v=6';
 import {installManagement} from './management-ui.mjs?v=7';
@@ -60,8 +61,8 @@ function renderBomOptions(){
   const matches=term?state.bom.formulas.filter(f=>matchesKeywords(f.fg_code,f.fg_name,term)):[];
   const exact=matches.find(f=>f.fg_code.toLocaleLowerCase('th-TH')===term.toLocaleLowerCase('th-TH'));
   state.selectedFormulaCode=(exact||matches.length===1?exact||matches[0]:null)?.fg_code||'';
-  $('#bom-results').innerHTML=matches.slice(0,30).map(f=>`<button type="button" class="bom-result ${f.fg_code===state.selectedFormulaCode?'selected':''}" data-bom-choice="${esc(f.fg_code)}" aria-pressed="${f.fg_code===state.selectedFormulaCode}"><strong>${esc(f.fg_code)}</strong><span>${esc(f.fg_name)}</span></button>`).join('');
-  $('#bom-source').textContent=`PK WMS · ${state.bom.formulas.length} สินค้า · ${!term?'พิมพ์เพื่อค้นหา':!matches.length?'ไม่พบสูตรที่ตรงกับคำค้น':`พบ ${matches.length} รายการ${matches.length>30?' · แสดง 30 รายการแรก':''}${state.selectedFormulaCode?' · เลือกสูตรแล้ว':' · เลือกสูตร'}`}`;
+  $('#bom-results').innerHTML=matches.slice(0,30).map(f=>`<button type="button" class="bom-result ${f.fg_code===state.selectedFormulaCode?'selected':''}" data-bom-choice="${esc(f.fg_code)}" aria-pressed="${f.fg_code===state.selectedFormulaCode}"><strong>${esc(f.fg_code)}</strong><span>${esc(f.fg_name)}${f.origin==='saved'?' · สูตรที่บันทึก':''}</span></button>`).join('');
+  $('#bom-source').textContent=`${state.bom.formulas.length} สูตร · ${!term?'ค้นหาสูตร PK WMS และสูตรที่บันทึก':!matches.length?'ไม่พบสูตรที่ตรงกับคำค้น':`พบ ${matches.length} รายการ${matches.length>30?' · แสดง 30 รายการแรก':''}${state.selectedFormulaCode?' · เลือกสูตรแล้ว':' · เลือกสูตร'}`}`;
   renderBomPreview();
   renderStockMatch();
 }
@@ -116,15 +117,20 @@ function renderStockLines(){
 }
 async function loadBom(){
   if(state.bom)return true;
+  let data=null;
   try{
     let response;
     try{response=await fetch('https://raw.githubusercontent.com/nk02388-cyber/Withdrawal-Skill-Matrix/main/pk-bom.json',{cache:'no-cache'});}catch{}
     if(!response?.ok)response=await fetch('./pk-bom.json',{cache:'no-cache'});
     if(!response.ok)throw Error(`HTTP ${response.status}`);
-    const data=await response.json();
+    data=await response.json();
     if(!Array.isArray(data.formulas)||!data.formulas.length||!(/^[0-9a-f]{64}$/.test(data.source_sha256)))throw Error('ข้อมูลสูตรไม่ถูกต้อง');
-    state.bom=data;return true;
-  }catch(error){notice(`โหลด BOM จาก PK WMS ไม่สำเร็จ: ${error.message}`,true);return false;}
+  }catch(error){data=null;notice(`โหลด BOM จาก PK WMS ไม่สำเร็จ: ${error.message}`,true);}
+  const saved=await state.db.rpc('get_saved_production_formulas');
+  if(saved.error)notice('โหลดสูตรที่บันทึกไม่สำเร็จ กรุณาลองใหม่',true);
+  const formulas=mergeFormulas(data?.formulas||[],Array.isArray(saved.data)?saved.data:[]);
+  if(!formulas.length)return false;
+  state.bom={...data,formulas};return true;
 }
 
 function notice(msg,error=false){const el=$('#notice');el.textContent=msg;el.hidden=!msg;el.classList.toggle('error',error);}
@@ -430,6 +436,7 @@ $('#new-ticket-btn').addEventListener('click',async()=>{
   const jobs=state.jobs.filter(j=>j.active),people=state.people.filter(p=>p.active);
   if(!jobs.length||!people.length){notice('ต้องมีประเภทงานและพนักงานก่อนสร้างใบเบิก',true);return;}
   state.bom=null;state.selectedFormulaCode='';state.stockLines=[];$('#ticket-form').reset();updateDocumentCount($('#ticket-form [name="ticket_no"]'));
+  $('#saved-formula-result').textContent='';$('#open-save-formula').hidden=!supervisor();
   $('#ticket-no-message').textContent='';$('#ticket-no-suggestion').hidden=true;$('#ticket-no-existing').hidden=true;$('#ticket-form [name="ticket_no"]').removeAttribute('aria-invalid');
   const [bomLoaded,stockLoaded]=await Promise.all([loadBom(),loadStockCatalog()]);
   if(!bomLoaded&&!stockLoaded){notice('โหลดทั้ง BOM และ Stock ไม่สำเร็จ ยังสร้างใบเบิกไม่ได้',true);return;}
@@ -460,6 +467,41 @@ $('#bom-results').addEventListener('click',e=>{
 $('#ticket-form [name="requested_qty"]').addEventListener('input',renderBomPreview);
 document.querySelectorAll('#ticket-form [name="source_mode"]').forEach(input=>input.addEventListener('change',setTicketMode));
 $('#stock-code').addEventListener('input',renderStockMatch);
+let pendingFormulaDraft=null;
+$('#open-save-formula').addEventListener('click',()=>{
+  if(!supervisor())return;
+  const selected=stockMode()?null:chosenFormula(),qty=Number($('#ticket-form [name="requested_qty"]').value);
+  if(!stockMode()&&(!selected||!Number.isFinite(qty)||qty<=0)){ $('#saved-formula-result').textContent='เลือกสูตรและใส่จำนวนผลิตก่อนบันทึกสูตร';return; }
+  if(!selected&&!state.stockLines.length){$('#saved-formula-result').textContent='เพิ่มวัสดุอย่างน้อย 1 รายการก่อน';return;}
+  pendingFormulaDraft={bomLines:structuredClone(selected?.lines||[]),stockLines:structuredClone(state.stockLines)};
+  const form=$('#save-formula-form');form.reset();
+  form.elements.fg_code.value=selected?.fg_code||'';form.elements.fg_name.value=selected?.fg_name||'';
+  form.elements.base_qty.value=selected?qty:'';form.elements.base_qty.readOnly=!!selected;
+  $('#save-formula-message').textContent='';
+  const lines=[...pendingFormulaDraft.bomLines.map(line=>({...line,required_qty:calcQty(line.qty_per_unit,qty)})),...pendingFormulaDraft.stockLines];
+  $('#save-formula-preview').innerHTML=`<div class="bom-table-wrap"><table class="bom-table"><thead><tr><th>วัสดุ (${lines.length} รายการ)</th><th>จำนวน</th></tr></thead><tbody>${lines.map(line=>`<tr><td><strong>${esc(line.pk_code)}</strong><small>${esc(line.pk_name)}</small></td><td>${qtyText(line.required_qty)} ${esc(line.unit)}</td></tr>`).join('')}</tbody></table></div>`;
+  $('#save-formula-dialog').showModal();
+});
+$('#save-formula-form').addEventListener('submit',async e=>{
+  e.preventDefault();if(!supervisor()||!pendingFormulaDraft)return;
+  const form=e.target,button=form.querySelector('[type="submit"]');button.disabled=true;
+  try{
+    await saveOnce('production-formula',async()=>{
+      const draft=formulaDraft({...pendingFormulaDraft,fg_code:form.elements.fg_code.value,fg_name:form.elements.fg_name.value,base_qty:form.elements.base_qty.value});
+      const {data,error}=await state.db.rpc('save_production_formula_as_supervisor',{p_username:state.username,p_code:state.code,p_fg_code:draft.fg_code,p_fg_name:draft.fg_name,p_base_qty:draft.base_qty,p_lines:draft.lines});
+      if(error)throw Error(/Formula code already saved/.test(error.message)?'รหัสนี้มีสูตรที่บันทึกแล้ว กรุณาใช้รหัสสูตรใหม่':saveErrorText(error));
+      state.bom={...state.bom,formulas:mergeFormulas(state.bom?.formulas||[],[data])};
+      // The saved formula now contains the extras; retaining them would duplicate materials.
+      state.stockLines=[];$('#bom-search').value=data.fg_code;
+      $('#ticket-form [name="source_mode"][value="bom"]').disabled=false;
+      $('#ticket-form [name="source_mode"][value="bom"]').checked=true;
+      setTicketMode();renderBomOptions();renderStockLines();
+      $('#saved-formula-result').textContent=`บันทึกสูตร ${data.fg_code} แล้ว · เลือกใช้ในใบเบิกนี้`;
+      pendingFormulaDraft=null;$('#save-formula-dialog').close();
+    });
+  }catch(error){$('#save-formula-message').textContent=error.message;}
+  finally{button.disabled=false;}
+});
 $('#stock-results').addEventListener('click',e=>{
   const choice=e.target.closest('[data-stock-choice]');
   if(!choice||choice.disabled)return;
@@ -492,7 +534,7 @@ $('#ticket-form').addEventListener('submit',async e=>{
       line.stock_report_date=state.stock.report_date;line.stock_snapshot_saved_at=state.stock.snapshot_saved_at;
     }
   }
-  const args={p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_fg_code:formula?.fg_code||null,p_fg_name:formula?.fg_name||null,p_requested_qty:qty,p_bom_version:formula?state.bom.source_sha256:null,p_bom_materials:bomLines,p_stock_lines:state.stockLines};
+  const args={p_ticket_no:String(f.get('ticket_no')).trim(),p_job_type_id:f.get('job_type_id'),p_assignee_id:f.get('assignee_id'),p_description:String(f.get('description')||'').trim(),p_fg_code:formula?.fg_code||null,p_fg_name:formula?.fg_name||null,p_requested_qty:qty,p_bom_version:formula?(formula.source_sha256||state.bom.source_sha256):null,p_bom_materials:bomLines,p_stock_lines:state.stockLines};
   const documentError=documentsError(readDocuments(e.target),qty,!manual);if(documentError){notice(documentError,true);return;}args.p_documents=readDocuments(e.target);
   const {error}=await workAction('create_withdrawal_ticket_as_supervisor',args);
   if(error){
