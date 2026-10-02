@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="management.css?v=1">
   <link rel="stylesheet" href="app-brand.css?v=1">
   <link rel="stylesheet" href="performance-visual.css?v=7">
+  <link rel="stylesheet" href="saved-formulas.css?v=1">
 </head>
 <body>
   <div class="app-shell">
@@ -84,7 +85,7 @@
   <dialog id="history-dialog"><div class="dialog-content"><div class="dialog-head"><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2 id="history-title">ประวัติใบเบิก</h2><div id="history-list" class="history-list"></div><div class="dialog-actions"><button type="button" class="text-btn" data-close>ปิด</button></div></div></dialog>
 
   <dialog id="pick-dialog"><form id="pick-form" class="dialog-content"><div class="dialog-head"><h2 id="pick-title">บันทึกเบิกจริง</h2><button class="icon-btn" type="button" data-close aria-label="ปิด">×</button></div><p class="hint">เติมยอดตามใบเบิกให้รายการใหม่ กรุณาตรวจยอดจริง · ส่วนต่างตั้งแต่ 1 หน่วยต้องระบุเหตุผล · ไม่ตัดสต็อก</p><p id="pick-edit-hint" class="hint" hidden>งานที่จบแล้ว: สถานะเปลี่ยนตามยอดเบิก โดยคงเวลาเดิม</p><div id="pick-lines"></div><label id="pick-edit-reason-wrap" hidden>เหตุผลการแก้ไข<textarea id="pick-edit-reason" maxlength="1000" rows="2"></textarea></label><p id="pick-close-summary" class="ticket-reason" role="status" hidden></p><p id="pick-message" role="alert"></p><div class="dialog-actions"><button class="text-btn" type="button" data-close>ยกเลิก</button><button id="pick-save" class="primary" type="submit">บันทึกเบิกจริง</button></div></form></dialog>
-  <script type="module" src="app.js?v=51"></script>
+  <script type="module" src="app.js?v=52"></script>
 <dialog id="staff-edit-dialog"><form id="staff-edit-form" class="dialog-content"><div class="dialog-head"><h2>แก้ไขข้อมูลพนักงาน</h2><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><input name="staff_id" type="hidden"><label>ชื่อพนักงาน<input name="name" required maxlength="100"></label><label>ตำแหน่ง (ไม่บังคับ)<input name="position" maxlength="100" placeholder="เช่น พนักงานคลังสินค้า หรือธุรการ"></label><p id="staff-edit-message" role="alert"></p><div class="dialog-actions"><button type="button" class="text-btn" data-close>ยกเลิก</button><button type="submit" class="primary">บันทึกข้อมูล</button></div></form></dialog>
 <dialog id="purge-dialog"><form id="purge-form" class="dialog-content"><div class="dialog-head"><button type="button" class="icon-btn" data-close aria-label="ปิด">×</button></div><h2>ยืนยันลบใบเบิกถาวร</h2><p id="purge-ticket" class="ticket-reason"></p><p>ลบวัสดุ เวลา และประวัติในใบ กู้คืนไม่ได้ เหลือบันทึกการลบ และใช้เลขใบเบิกซ้ำได้</p><label>พิมพ์เลขที่ใบเบิกตามที่แสดง<input name="confirmation" required maxlength="80" autocomplete="off"></label><label>เหตุผลการลบถาวร<textarea name="reason" required maxlength="1000" rows="3"></textarea></label><p id="purge-message" role="alert"></p><div class="dialog-actions"><button type="button" class="text-btn" data-close>กลับ</button><button type="submit" class="primary">ยืนยันลบถาวร</button></div></form></dialog></body>
 </html>

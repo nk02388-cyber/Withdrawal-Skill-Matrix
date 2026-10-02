@@ -158,7 +158,7 @@ function checkTicketNumber(){
 function updateDocumentCount(input){
   const form=input.closest('form'),hint=form.querySelector('[data-document-count]');
   if(form.dataset.hasFg!==undefined)renderDocuments(form);
-  if(hint)hint.textContent=input.value.trim()?`${new Set(ticketReferences({ticket_no:input.value,fg_code:form.dataset.hasFg==='true'?'selected':null}).map(ref=>ref.toUpperCase())).size} ใบ · รวมเป็น 1 งาน ใช้ใช้เวลาเดียวกัน`:'หลายใบคั่นด้วยช่องว่างหรือ ,';
+  if(hint)hint.textContent=input.value.trim()?`${new Set(ticketReferences({ticket_no:input.value,fg_code:form.dataset.hasFg==='true'?'selected':null}).map(ref=>ref.toUpperCase())).size} ใบ · รวมเป็น 1 งาน ใช้เวลาเดียวกัน`:'หลายใบคั่นด้วยช่องว่างหรือ ,';
 }
 function syncLabel(msg,ok=false){$('#sync-label').textContent=msg;$('.sync-dot').classList.toggle('online',ok);}
 function updateMode(){
