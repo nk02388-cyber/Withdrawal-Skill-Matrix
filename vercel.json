@@ -3,6 +3,27 @@
   "framework": null,
   "buildCommand": "node scripts/build-vercel.cjs",
   "outputDirectory": "vercel-public",
-  "redirects": [{"source": "/:path*", "destination": "https://bcl-wms.vercel.app/?module=warehouse-operations", "permanent": false}],
-  "headers": [{"source": "/(.*)", "headers": [{"key": "X-Content-Type-Options", "value": "nosniff"}]}]
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://bcl-wms.vercel.app/?module=warehouse-operations",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "destination": "https://bcl-wms.vercel.app/?module=warehouse-operations",
+      "permanent": false
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
+      ]
+    }
+  ]
 }
