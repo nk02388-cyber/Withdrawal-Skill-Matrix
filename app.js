@@ -1,4 +1,5 @@
-import {formulaDraft,mergeFormulas} from './saved-formulas.mjs?v=1';
+import {isWipCode} from './material-policy.mjs?v=1';
+import {formulaDraft,mergeFormulas} from './saved-formulas.mjs?v=2';
 import {withdrawalTimePerformance,MINUTES_PER_DOCUMENT} from './time-performance.mjs?v=1';
 import {followupComplete,reportingTickets,varianceRows} from './management.mjs?v=6';
 import {installManagement} from './management-ui.mjs?v=7';
@@ -90,7 +91,7 @@ async function loadStockCatalog(){
     if(!response.ok)throw Error(`HTTP ${response.status}`);
     const data=await response.json();
     if(!Number.isInteger(data.snapshot_id)||!Array.isArray(data.items)||!data.items.length)throw Error('ไม่มีรายการ Stock ล่าสุด');
-    state.stock={...data,items:data.items.filter(item=>item.code&&item.name&&item.unit&&!item.unit_conflict)};
+    state.stock={...data,items:data.items.filter(item=>item.code&&item.name&&item.unit&&!item.unit_conflict&&!isWipCode(item.code))};
     $('#stock-source').textContent=`Stock PK WMS ${data.report_date} · บันทึก ${fmt(data.snapshot_saved_at)} · ${state.stock.items.length} รหัส`;
     renderStockMatch();return true;
   }catch(error){

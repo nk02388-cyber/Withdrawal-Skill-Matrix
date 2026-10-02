@@ -15,16 +15,17 @@ if (!detail || typeof detail !== 'object') throw new Error('PK WMS BOM not found
 const formulas = Object.entries(detail).map(([fg_code, formula]) => ({
   fg_code,
   fg_name: formula.fg_name,
-  lines: formula.lines.map(line => ({
+  lines: formula.lines.filter(line=>!String(line.pk_code||'').trim().startsWith('5')).map(line => ({
     pk_code: line.pk_code,
     pk_name: line.pk_name,
     unit: line.unit,
     qty_per_unit: line.qty_per_unit
   }))
-})).sort((a,b) => a.fg_code.localeCompare(b.fg_code));
+})).filter(formula=>formula.lines.length>0).sort((a,b) => a.fg_code.localeCompare(b.fg_code));
 if (formulas.length < 100) throw new Error('Suspiciously few BOM formulas; refusing to overwrite');
 const output = {
   source: 'nk02388-cyber/PK-WMS:index.html',
+  excludes_wip: true,
   source_sha256: crypto.createHash('sha256').update(JSON.stringify(formulas)).digest('hex'),
   formulas
 };
